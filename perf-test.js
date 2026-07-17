@@ -212,6 +212,11 @@ check("badgeClass('X=D') === 'b-d'", ctx.badgeClass('X=D') === 'b-d', ctx.badgeC
 check("badgeClass('R=KW') === 'b-kw'", ctx.badgeClass('R=KW') === 'b-kw', ctx.badgeClass('R=KW'));
 check("hrs('Z') === 0 (sick day, unworked)", ctx.hrs('Z') === 0, `got ${ctx.hrs('Z')}`);
 check("badgeClass('Z') === 'b-z'", ctx.badgeClass('Z') === 'b-z', ctx.badgeClass('Z'));
+check("June has no stray shift code in the 'op' remarks field", ctx.PRESET.June.every(r => r.op === '' || !/^[A-Z=*]{1,4}$/.test((r.op||'').toUpperCase())), JSON.stringify(ctx.PRESET.June.find(r => r.op && /^[A-Z=*]{1,4}$/.test(r.op.toUpperCase()))));
+{
+  const gmaBreak = ctx.calcTotals('June').gmaBreak;
+  check("calcTotals breaks out 'Z' (sick) separately, not folded into 'R'", gmaBreak.Z === 7 && gmaBreak.R === 0, JSON.stringify(gmaBreak));
+}
 check("escapeHtml neutralises HTML", ctx.escapeHtml('<img src=x onerror="x">') === '&lt;img src=x onerror=&quot;x&quot;&gt;', ctx.escapeHtml('<img src=x onerror="x">'));
 check("scan runs fully client-side (no API key, no server endpoint)", !pageScript.includes("anthropic_api_key") && !pageScript.includes("api.anthropic.com") && !pageScript.includes("PROXY_URL"));
 check("scan uses local Tesseract OCR", pageScript.includes("Tesseract") && pageScript.includes("scanRoosterOCR"));

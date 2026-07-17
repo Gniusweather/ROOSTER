@@ -313,7 +313,7 @@ tbody tr.today td.dt-num-wrap .dt-num {
     <div class="legend-grid">
       <div class="leg"><span class="badge b-x" style="min-width:auto;padding:3px 8px">X</span> Vrij</div>
       <div class="leg"><span class="badge b-d" style="min-width:auto;padding:3px 8px">D</span> Dagdienst – 12u</div>
-      <div class="leg"><span class="badge b-ds" style="min-width:auto;padding:3px 8px">D*</span> Dagdienst* – 12u</div>
+      <div class="leg"><span class="badge b-ds" style="min-width:auto;padding:3px 8px">D*</span> Dagdienst* – 8u</div>
       <div class="leg"><span class="badge b-a" style="min-width:auto;padding:3px 8px">A</span> Avonddienst – 12u</div>
       <div class="leg"><span class="badge b-r" style="min-width:auto;padding:3px 8px">R</span> Reserve</div>
       <div class="leg"><span class="badge b-vak" style="min-width:auto;padding:3px 8px">VAK</span> Vakantie</div>
@@ -528,7 +528,7 @@ const PRESET = {
     {date:4, day:'DO',qpi:'X',   jpa:'KW',  ays:'R',   fca:'A',   gma2:'Z',   op:''},
     {date:5, day:'VR',qpi:'D*',  jpa:'A',   ays:'KW',  fca:'X',   gma2:'Z',   op:''},
     {date:6, day:'ZA',qpi:'D',   jpa:'A',   ays:'X',   fca:'R',   gma2:'X',   op:''},
-    {date:7, day:'ZO',qpi:'A',   jpa:'X',   ays:'D',   fca:'R',   gma2:'X',   op:'X'},
+    {date:7, day:'ZO',qpi:'A',   jpa:'X',   ays:'D',   fca:'R',   gma2:'X',   op:''},
     {date:8, day:'MA',qpi:'A',   jpa:'R',   ays:'KW',  fca:'X',   gma2:'Z',   op:''},
     {date:9, day:'DI',qpi:'X',   jpa:'D',   ays:'A',   fca:'X',   gma2:'Z',   op:''},
     {date:10,day:'WO',qpi:'R',   jpa:'X',   ays:'A',   fca:'KW',  gma2:'Z',   op:''},
@@ -889,8 +889,8 @@ function makeBadge(val, editable, onChange){
 
 function calcTotals(m){
   let jpa=0, gma=0, jpadays=0, gmadays=0;
-  const jpaBreak={D:0,'D*':0,A:0,KW:0,R:0,'R=A':0,'R=D':0,VAK:0,X:0};
-  const gmaBreak={D:0,'D*':0,A:0,KW:0,R:0,'R=A':0,'R=D':0,VAK:0,X:0};
+  const jpaBreak={D:0,'D*':0,A:0,KW:0,R:0,'R=A':0,'R=D':0,VAK:0,X:0,Z:0,VG:0};
+  const gmaBreak={D:0,'D*':0,A:0,KW:0,R:0,'R=A':0,'R=D':0,VAK:0,X:0,Z:0,VG:0};
   store[m].forEach(r=>{
     const jh=hrs(r.jpa); const gh=hrs(r.gma2);
     jpa+=jh; gma+=gh;
@@ -1686,6 +1686,8 @@ function personCard(name, days, total, brk, filterKey){
     {k:'R=D', label:'Reserve → Dag',   u:12, cls:'b-rd'},
     {k:'R',   label:'Reserve',          u:0,  cls:'b-r'},
     {k:'VAK', label:'Vakantie',         u:0,  cls:'b-vak'},
+    {k:'Z',   label:'Ziek',             u:0,  cls:'b-z'},
+    {k:'VG',  label:'VG',               u:0,  cls:'b-x'},
     {k:'X',   label:'Vrij',            u:0,  cls:'b-x'},
   ];
 
