@@ -955,17 +955,27 @@ function makeBadge(val, editable, onChange, cycleOpts){
   return el;
 }
 
+// Codes that are pure synonyms of another code (same hours, same badge colour)
+// fold into that code's breakdown bucket. Codes with their own hours/meaning
+// (R=A, R=D, D*+KW, ...) keep a dedicated bucket instead.
+function breakdownKey(code){
+  const s=(code||'').toUpperCase().trim();
+  if(s==='X/D'||s==='X=D') return 'D';
+  if(s==='R=KW') return 'KW';
+  return s;
+}
+
 function calcTotals(m){
   let jpa=0, gma=0, jpadays=0, gmadays=0;
-  const jpaBreak={D:0,'D*':0,A:0,KW:0,R:0,'R=A':0,'R=D':0,VAK:0,X:0,Z:0,VG:0};
-  const gmaBreak={D:0,'D*':0,A:0,KW:0,R:0,'R=A':0,'R=D':0,VAK:0,X:0,Z:0,VG:0};
+  const jpaBreak={D:0,'D*':0,A:0,KW:0,R:0,'R=A':0,'R=D':0,VAK:0,X:0,Z:0,VG:0,'D*+KW':0};
+  const gmaBreak={D:0,'D*':0,A:0,KW:0,R:0,'R=A':0,'R=D':0,VAK:0,X:0,Z:0,VG:0,'D*+KW':0};
   store[m].forEach(r=>{
     const jh=hrs(r.jpa); const gh=hrs(r.gma2);
     jpa+=jh; gma+=gh;
     if(jh>0) jpadays++;
     if(gh>0) gmadays++;
     // breakdown
-    const jk=r.jpa?.toUpperCase().trim()||''; const gk=r.gma2?.toUpperCase().trim()||'';
+    const jk=breakdownKey(r.jpa); const gk=breakdownKey(r.gma2);
     if(jk in jpaBreak) jpaBreak[jk]++; else if(jk) jpaBreak.R++;
     if(gk in gmaBreak) gmaBreak[gk]++; else if(gk) gmaBreak.R++;
   });
@@ -1742,6 +1752,7 @@ function personCard(name, days, total, brk, filterKey){
   const shiftDefs = [
     {k:'D',   label:'Dagdienst',        u:12, cls:'b-d'},
     {k:'D*',  label:'Dagdienst*',       u:8,  cls:'b-ds'},
+    {k:'D*+KW', label:'Dagdienst* + Kantoorwerk', u:12, cls:'b-ds'},
     {k:'A',   label:'Avonddienst',      u:12, cls:'b-a'},
     {k:'KW',  label:'Kantoorwerk',      u:4,  cls:'b-kw'},
     {k:'R=A', label:'Reserve → Avond', u:12, cls:'b-ra'},

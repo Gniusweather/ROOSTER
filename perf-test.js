@@ -157,7 +157,7 @@ console.log('\n=== Script init (parse + first render) ===');
 const exportShim = `
 ;globalThis.__t = {
   MONTHS, MDAYS, PRESET, MONTHS2025, DATA2025,
-  emptyMonth, hrs, escapeHtml, badgeClass, calcTotals, calc2025Yearly,
+  emptyMonth, hrs, escapeHtml, badgeClass, calcTotals, breakdownKey, calc2025Yearly,
   renderTableOnly, render, render2025, exportXlsx, export2025,
   undoPush, undoEdit, normShift, personsFor,
   setMultiView: (m,v) => { multiView[m] = v; },
@@ -220,6 +220,21 @@ check("June has no stray shift code in the 'op' remarks field", ctx.PRESET.June.
   const gmaBreak = ctx.calcTotals('June').gmaBreak;
   check("calcTotals breaks out 'Z' (sick) separately, not folded into 'R'", gmaBreak.Z === 7 && gmaBreak.R === 0, JSON.stringify(gmaBreak));
 }
+// Every code used anywhere in the 2026 preset must land in a breakdown bucket
+// (its own, or a folded synonym's) so per-person day counts always sum to the
+// month's day count — no code should silently inflate 'R' (Reserve).
+ctx.MONTHS.forEach(m=>{
+  const rows = ctx.PRESET[m];
+  if(!rows) return;
+  const {jpaBreak, gmaBreak} = ctx.calcTotals(m);
+  const jpaSum = Object.values(jpaBreak).reduce((a,b)=>a+b,0);
+  const gmaSum = Object.values(gmaBreak).reduce((a,b)=>a+b,0);
+  check(`${m} jpaBreak day counts sum to ${rows.length} (no code silently miscounted)`, jpaSum === rows.length, `got ${jpaSum}`);
+  check(`${m} gmaBreak day counts sum to ${rows.length} (no code silently miscounted)`, gmaSum === rows.length, `got ${gmaSum}`);
+});
+check("breakdownKey folds 'X=D'/'X/D' into 'D' (same hours/colour as D)", ctx.breakdownKey('X=D') === 'D' && ctx.breakdownKey('X/D') === 'D');
+check("breakdownKey folds 'R=KW' into 'KW' (same hours/colour as KW)", ctx.breakdownKey('R=KW') === 'KW');
+check("breakdownKey keeps 'D*+KW' as its own bucket (12u ≠ D*'s 8u)", ctx.breakdownKey('D*+KW') === 'D*+KW');
 check("escapeHtml neutralises HTML", ctx.escapeHtml('<img src=x onerror="x">') === '&lt;img src=x onerror=&quot;x&quot;&gt;', ctx.escapeHtml('<img src=x onerror="x">'));
 check("scan runs fully client-side (no API key, no server endpoint)", !pageScript.includes("anthropic_api_key") && !pageScript.includes("api.anthropic.com") && !pageScript.includes("PROXY_URL"));
 check("scan uses local Tesseract OCR", pageScript.includes("Tesseract") && pageScript.includes("scanRoosterOCR"));
