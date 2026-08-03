@@ -176,9 +176,9 @@ check('init completes in < 2000 ms', initMs < 2000, `${initMs.toFixed(1)} ms`);
 const ctx = sandbox.__t;
 
 console.log('\n=== Data integrity: 2026 preset ===');
-const KNOWN_CODES = new Set(['', 'X', 'D', 'D*', 'A', 'KW', 'R', 'R=A', 'R=D', 'R=D*', 'R=KW', 'VAK', 'VG', 'X/D', 'X=D', 'Z']);
+const KNOWN_CODES = new Set(['', 'X', 'D', 'D*', 'A', 'KW', 'R', 'R=A', 'R=D', 'R=D*', 'R=KW', 'VAK', 'VG', 'X/D', 'X=D', 'Z', 'D*+KW']);
 const DNAMES = ['MA','DI','WO','DO','VR','ZA','ZO'];
-let badDays = [], badCodes = [], badCounts = [];
+let badDays = [], badCodes = [], badCounts = [], badPjan = [];
 ctx.MONTHS.forEach((m, idx) => {
   const rows = ctx.PRESET[m];
   if (!rows) return;
@@ -188,15 +188,18 @@ ctx.MONTHS.forEach((m, idx) => {
     if (r.date !== i + 1) badCounts.push(`${m} row ${i}: date ${r.date}`);
     const realDay = DNAMES[(new Date(2026, idx, r.date).getDay() + 6) % 7];
     if (r.day !== realDay) badDays.push(`${m} ${r.date}: '${r.day}' should be '${realDay}'`);
-    for (const code of [r.jpa, r.gma2, r.qpi, r.ays, r.fca]) {
-      if (code === undefined) continue; // qpi/ays/fca only exist on multi-person months
+    for (const code of [r.jpa, r.gma2, r.qpi, r.ays, r.fca, r.econ]) {
+      if (code === undefined) continue; // qpi/ays/fca/econ only exist on multi-person months
       if (!KNOWN_CODES.has((code || '').toUpperCase().trim())) badCodes.push(`${m} ${r.date}: '${code}'`);
     }
+    // PJAN is a partial-shift flag, not a shift code — only '' or '*' are valid.
+    if (r.pjan !== undefined && r.pjan !== '' && r.pjan !== '*') badPjan.push(`${m} ${r.date}: '${r.pjan}'`);
   });
 });
 check('every preset month has the correct number of days, sequential dates', badCounts.length === 0, badCounts.join('; '));
 check('every preset day label matches the real 2026 calendar', badDays.length === 0, badDays.slice(0, 5).join('; '));
 check('every preset shift code is a known code', badCodes.length === 0, badCodes.slice(0, 5).join('; '));
+check("every preset PJAN cell is '' or '*' (flag column, not a shift code)", badPjan.length === 0, badPjan.slice(0, 5).join('; '));
 
 console.log('\n=== Bug-fix regression checks ===');
 check("MDAYS[1] is 28 (2026 is not a leap year)", ctx.MDAYS[1] === 28, `got ${ctx.MDAYS[1]}`);
@@ -247,6 +250,27 @@ check("other months still show default 2 columns (filter=all)", (ctx.setCurrent(
 const juneManualJpa = ctx.PRESET.June.reduce((s, r) => s + ctx.hrs(r.jpa), 0);
 const juneTotals = ctx.calcTotals('June');
 check("June calcTotals.jpa matches manual per-row sum (jpa/gma2 untouched)", juneTotals.jpa === juneManualJpa, `${juneTotals.jpa} vs ${juneManualJpa}`);
+
+// August renders all 7 person columns (adds ECON/PJAN beyond June/July's 5), GMA & JPA bold
+{
+  const cols = ctx.personsFor('August');
+  check("August renders 7 person columns", cols.length === 7, `got ${cols.length}`);
+  check("August column order is GMA, JPA, QPI, AYS, FCA, ECON, PJAN", cols.map(p=>p.label).join(',') === 'GMA,JPA,QPI,AYS,FCA,ECON,PJAN', cols.map(p=>p.label).join(','));
+  check("August: GMA & JPA are bold, others not", cols[0].bold && cols[1].bold && cols.slice(2).every(p => !p.bold));
+  check("August preset rows carry qpi/ays/fca/econ/pjan", ctx.PRESET.August.every(r => 'qpi' in r && 'ays' in r && 'fca' in r && 'econ' in r && 'pjan' in r));
+
+  ctx.setMultiView('August', 'gmajpa');
+  const two = ctx.personsFor('August');
+  check("August 'GMA+JPA only' view shows exactly GMA then JPA", two.map(p=>p.label).join(',') === 'GMA,JPA', two.map(p=>p.label).join(','));
+  ctx.setMultiView('August', 'all');
+  check("August toggling back to 'all' restores 7 columns", ctx.personsFor('August').length === 7);
+
+  // JPA's D*+KW combined shift (Aug 14) must count as worked hours, not silently drop to 0
+  check("hrs('D*+KW') === 12 (D* 8u + KW 4u)", ctx.hrs('D*+KW') === 12, `got ${ctx.hrs('D*+KW')}`);
+  const augManualJpa = ctx.PRESET.August.reduce((s, r) => s + ctx.hrs(r.jpa), 0);
+  const augTotals = ctx.calcTotals('August');
+  check("August calcTotals.jpa matches manual per-row sum", augTotals.jpa === augManualJpa, `${augTotals.jpa} vs ${augManualJpa}`);
+}
 
 // calcTotals consistency: total hours must equal the manual per-row sum
 const t = ctx.calcTotals('February');
