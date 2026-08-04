@@ -159,7 +159,7 @@ const exportShim = `
   MONTHS, MDAYS, PRESET, MONTHS2025, DATA2025, MULTI_PERSON_COLUMNS,
   emptyMonth, hrs, escapeHtml, badgeClass, calcTotals, breakdownKey, calc2025Yearly,
   renderTableOnly, render, render2025, exportXlsx, export2025,
-  undoPush, undoEdit, normShift, personsFor, scanRoosterOCR,
+  undoPush, undoEdit, personsFor,
   setMultiView: (m,v) => { multiView[m] = v; },
   setCurrent: m => { current = m; },
   setMode: m => { mode = m; },
@@ -236,13 +236,9 @@ check("breakdownKey folds 'X=D'/'X/D' into 'D' (same hours/colour as D)", ctx.br
 check("breakdownKey folds 'R=KW' into 'KW' (same hours/colour as KW)", ctx.breakdownKey('R=KW') === 'KW');
 check("breakdownKey keeps 'D*+KW' as its own bucket (12u ≠ D*'s 8u)", ctx.breakdownKey('D*+KW') === 'D*+KW');
 check("escapeHtml neutralises HTML", ctx.escapeHtml('<img src=x onerror="x">') === '&lt;img src=x onerror=&quot;x&quot;&gt;', ctx.escapeHtml('<img src=x onerror="x">'));
-check("scan runs fully client-side (no API key, no server endpoint)", !pageScript.includes("anthropic_api_key") && !pageScript.includes("api.anthropic.com") && !pageScript.includes("PROXY_URL"));
-check("scan uses local Tesseract OCR", pageScript.includes("Tesseract") && pageScript.includes("scanRoosterOCR"));
+check("no OCR library or scan pipeline left in the page (photo upload is raw-only now)", !pageScript.includes("Tesseract") && !pageScript.includes("scanRoosterOCR") && !pageScript.includes("normShift"));
 check("photo reference image saved to localStorage", pageScript.includes("localStorage.setItem('img_'") || pageScript.includes("img_' + m"));
-// normShift snaps OCR noise to the nearest known shift code
-check("normShift maps clean codes (case-insensitive)", ctx.normShift('d*') === 'D*' && ctx.normShift('vak') === 'VAK', `${ctx.normShift('d*')}, ${ctx.normShift('vak')}`);
-check("normShift fuzzy-corrects a 1-char OCR error (VAX→VAK)", ctx.normShift('VAX') === 'VAK', ctx.normShift('VAX'));
-check("normShift returns '' for empty input", ctx.normShift('') === '');
+check("uploaded photo opens fullscreen on click", pageScript.includes("showImageFullscreen") && pageScript.includes("img-lightbox"));
 
 // June & July both show all five person columns, GMA & JPA bold, in the required order
 for (const monthName of ['June', 'July']) {
@@ -363,54 +359,5 @@ console.log('\n=== Stale-cache migration (June/July schema upgrade) ===');
   check('migrated June day 4 carries the corrected preset values', migratedJune[3].jpa === 'KW' && migratedJune[3].gma2 === 'Z', `jpa=${migratedJune[3].jpa} gma2=${migratedJune[3].gma2}`);
 }
 
-(async () => {
-  console.log('\n=== OCR scan: multi-person columns ===');
-  // Tesseract itself isn't available in Node — mock its worker so we can
-  // exercise scanRoosterOCR()'s column-mapping logic (the real bug fixed
-  // here: it used to only ever look for JPA/GMA headers, and replaced the
-  // whole month with a blank jpa/gma2-only template, silently wiping
-  // QPI/AYS/FCA/ECON/PJAN on any multi-person month scan).
-  const word = (text, cx, cy, h) => ({ text, bbox: { x0: cx - 5, x1: cx + 5, y0: cy - h / 2, y1: cy + h / 2 } });
-  const mockTesseract = words => ({
-    createWorker: async () => ({
-      setParameters: async () => {},
-      recognize: async () => ({ data: { words } }),
-      terminate: async () => {},
-    }),
-  });
-
-  // Case 1: a photo cropped to only show DAG/DAT/JPA/GMA/OPMERKING (no
-  // QPI/AYS/FCA/ECON/PJAN headers) — those columns must be left untouched,
-  // not wiped, while JPA/GMA still get overwritten from the scan.
-  const beforeAug1 = { ...ctx.getStore().August[0] };
-  sandbox.Tesseract = mockTesseract([
-    word('DAG', 0, 10, 12), word('DAT', 50, 10, 12), word('JPA', 100, 10, 12), word('GMA', 150, 10, 12), word('OPMERKING', 250, 10, 12),
-    word('ZA', 0, 30, 12), word('1', 50, 30, 12), word('D', 100, 30, 12), word('X', 150, 30, 12),
-    word('ZO', 0, 50, 12), word('2', 50, 50, 12), word('A', 100, 50, 12), word('X', 150, 50, 12),
-  ]);
-  await ctx.scanRoosterOCR({}, 'August');
-  const afterAug1 = ctx.getStore().August[0];
-  check("OCR scan without QPI/AYS/FCA/ECON/PJAN headers leaves those columns untouched",
-    afterAug1.qpi === beforeAug1.qpi && afterAug1.ays === beforeAug1.ays && afterAug1.fca === beforeAug1.fca &&
-    afterAug1.econ === beforeAug1.econ && afterAug1.pjan === beforeAug1.pjan,
-    `before=${JSON.stringify(beforeAug1)} after=${JSON.stringify(afterAug1)}`);
-  check("OCR scan still overwrites JPA from the detected column", afterAug1.jpa === 'D', `got '${afterAug1.jpa}'`);
-
-  // Case 2: a photo showing all 7 headers — every column should be read.
-  sandbox.Tesseract = mockTesseract([
-    word('DAG', 0, 10, 12), word('DAT', 50, 10, 12), word('QPI', 100, 10, 12), word('JPA', 150, 10, 12),
-    word('AYS', 200, 10, 12), word('FCA', 250, 10, 12), word('GMA', 300, 10, 12), word('ECON', 350, 10, 12),
-    word('PJAN', 400, 10, 12), word('OPMERKING', 450, 10, 12),
-    word('ZA', 0, 30, 12), word('1', 50, 30, 12), word('R', 100, 30, 12), word('D', 150, 30, 12),
-    word('A', 200, 30, 12), word('X', 250, 30, 12), word('KW', 300, 30, 12), word('A', 350, 30, 12), word('*', 400, 30, 12),
-  ]);
-  await ctx.scanRoosterOCR({}, 'August');
-  const fullScan = ctx.getStore().August[0];
-  check("OCR scan reads all 7 columns when all 7 headers are present",
-    fullScan.qpi === 'R' && fullScan.jpa === 'D' && fullScan.ays === 'A' && fullScan.fca === 'X' &&
-    fullScan.gma2 === 'KW' && fullScan.econ === 'A' && fullScan.pjan === '*',
-    JSON.stringify(fullScan));
-
-  console.log(`\n${passed} passed, ${failed} failed\n`);
-  process.exit(failed === 0 ? 0 : 1);
-})();
+console.log(`\n${passed} passed, ${failed} failed\n`);
+process.exit(failed === 0 ? 0 : 1);

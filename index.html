@@ -149,12 +149,30 @@ body {
 .img-wrap img {
   width: 100%; max-height: 260px; object-fit: contain;
   border-radius: 10px; border: 1px solid var(--border); display: block;
+  cursor: zoom-in;
 }
 .img-remove {
   position: absolute; top: 8px; right: 8px;
   background: rgba(239,68,68,0.85); color: #fff; border: none;
   border-radius: 6px; padding: 4px 10px; font-size: 11px;
   font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif;
+}
+
+/* ── IMAGE LIGHTBOX (fullscreen photo view) ── */
+.img-lightbox {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.92);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; cursor: zoom-out; padding: 24px;
+}
+.img-lightbox img {
+  max-width: 100%; max-height: 100%; object-fit: contain;
+  border-radius: 8px;
+}
+.img-lightbox-close {
+  position: absolute; top: 16px; right: 20px;
+  background: rgba(255,255,255,0.1); color: #fff; border: none;
+  width: 36px; height: 36px; border-radius: 50%; font-size: 18px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
 
 /* ── TABLE ── */
@@ -340,7 +358,6 @@ tbody tr.today td.dt-num-wrap .dt-num {
 <div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 // ══════════════════════════════════════════
 //  CONFIG
@@ -1031,175 +1048,21 @@ function setFilter(f){
 }
 
 // ══════════════════════════════════════════
-//  PHOTO UPLOAD + LOCAL OCR SCAN (no API, no server)
-//  Uses Tesseract.js entirely in the browser.
+//  PHOTO UPLOAD (raw reference photo, no OCR)
 // ══════════════════════════════════════════
-const KNOWN_SHIFTS = ['X','D','D*','A','KW','R','R=A','R=D','R=KW','VAK','VG','Z','X=D','X/D','D*+KW'];
-
-function levenshtein(a, b){
-  const m=a.length, n=b.length;
-  const d=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]);
-  for(let j=0;j<=n;j++) d[0][j]=j;
-  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++)
-    d[i][j]=Math.min(d[i-1][j]+1, d[i][j-1]+1, d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
-  return d[m][n];
-}
-
-// Snap a raw OCR cell to the nearest known shift code.
-function normShift(raw){
-  if(!raw) return '';
-  let s = raw.toUpperCase().replace(/\s+/g,'')
-            .replace(/[—–·.,;:]/g,'')   // stray punctuation
-            .replace(/0/g,'O');          // OCR often reads O as 0
-  // Common letter confusions inside codes
-  s = s.replace(/[|!]/g,'').replace(/=+/,'=');
-  if(s==='' ) return '';
-  if(KNOWN_SHIFTS.includes(s)) return s;
-  // fuzzy match
-  let best='', bestD=99;
-  for(const code of KNOWN_SHIFTS){
-    const dist = levenshtein(s, code);
-    if(dist<bestD){ bestD=dist; best=code; }
-  }
-  return bestD<=1 ? best : s;   // keep raw if no close match (user corrects)
-}
-
-// Collect words+bbox from a Tesseract result across API shapes.
-function collectWords(data){
-  if(Array.isArray(data.words) && data.words.length) return data.words;
-  const out=[];
-  (data.blocks||[]).forEach(b=>(b.paragraphs||[]).forEach(p=>(p.lines||[]).forEach(l=>
-    (l.words||[]).forEach(w=>out.push(w)))));
-  return out;
-}
-
-async function scanRoosterOCR(srcCanvas, m){
-  const status = document.getElementById('ai-status');
-  const set = html => { if(status) status.innerHTML = html; };
-
-  if(typeof Tesseract === 'undefined'){
-    set('⚠️ OCR-bibliotheek niet geladen. Controleer je internetverbinding en herlaad de pagina.');
-    return;
-  }
-
-  // Columns this month actually tracks — multi-person months (June/July/August)
-  // have more than just JPA/GMA2.
-  const cols = MULTI_PERSON_COLUMNS[m] || [{key:'jpa',label:'JPA'},{key:'gma2',label:'GMA2'}];
-  let worker;
-  try {
-    set('🔍 OCR wordt geladen (eenmalig downloaden)...');
-    worker = await Tesseract.createWorker('eng', 1, {
-      logger: msg => {
-        if(msg.status==='recognizing text')
-          set(`🔍 Tekst lezen... ${Math.round((msg.progress||0)*100)}%`);
-      }
-    });
-    await worker.setParameters({ tessedit_pageseg_mode: '6' }); // assume a uniform block
-
-    const { data } = await worker.recognize(srcCanvas, {}, { blocks: true });
-    await worker.terminate();
-
-    const words = collectWords(data)
-      .map(w => ({
-        text: (w.text||'').trim(),
-        cx: (w.bbox.x0 + w.bbox.x1)/2,
-        cy: (w.bbox.y0 + w.bbox.y1)/2,
-        h:  (w.bbox.y1 - w.bbox.y0)
-      }))
-      .filter(w => w.text);
-
-    if(words.length < 10) throw new Error('Te weinig tekst herkend — probeer een scherpere, rechte foto.');
-
-    // ── Detect column anchors from the header row: DAG/DAT/OPM plus whichever
-    // person columns this month tracks (JPA/GMA2 always; QPI/AYS/FCA/ECON/PJAN
-    // on multi-person months) ──
-    const COL_HEADER_RE = {
-      jpa:  /^JPA$/i,
-      gma2: /^GMA2?$/i,
-      qpi:  /^QPI$/i,
-      ays:  /^AYS$/i,
-      fca:  /^FCA$/i,
-      econ: /^ECON$/i,
-      pjan: /^PJAN$/i,
-    };
-    const HEADERS = {DAG:/^DAG$/i, DAT:/^DAT$/i, OPM:/^OPMERK/i};
-    cols.forEach(c=>{ if(COL_HEADER_RE[c.key]) HEADERS[c.key]=COL_HEADER_RE[c.key]; });
-    const anchors = {};
-    for(const w of words){
-      for(const [key,re] of Object.entries(HEADERS)){
-        if(re.test(w.text) && anchors[key]===undefined) anchors[key]=w.cx;
-      }
-    }
-    if(anchors.jpa===undefined || anchors.gma2===undefined)
-      throw new Error('Kon de JPA/GMA kolommen niet vinden in de foto. Maak een rechtere foto van de hele tabel.');
-
-    // ── Cluster words into rows by vertical position ──
-    const medH = words.map(w=>w.h).sort((a,b)=>a-b)[Math.floor(words.length/2)] || 20;
-    const sorted = [...words].sort((a,b)=>a.cy-b.cy);
-    const rows=[]; let cur=[];
-    for(const w of sorted){
-      if(cur.length===0 || Math.abs(w.cy - cur[cur.length-1].cy) < medH*0.7){ cur.push(w); }
-      else { rows.push(cur); cur=[w]; }
-    }
-    if(cur.length) rows.push(cur);
-
-    // ── Start from the current data, not a blank template, so any column
-    // without a detected header (photo cropped tight, or a column just isn't
-    // in this month) keeps its existing value instead of being wiped. Only
-    // columns with a detected anchor get overwritten below. ──
-    const base = store[m].map(r=>({...r}));
-    const nearest = (row, x) => {
-      let best=null, bd=1e9;
-      for(const w of row){ const d=Math.abs(w.cx-x); if(d<bd){bd=d; best=w;} }
-      return best;
-    };
-    let filled=0;
-    for(const row of rows){
-      // date = a 1..31 integer near the DAT column (or leftmost number)
-      let date=0;
-      const datX = anchors.DAT!==undefined ? anchors.DAT : 0;
-      const nums = row.filter(w=>/^\d{1,2}$/.test(w.text))
-                      .sort((a,b)=>Math.abs(a.cx-datX)-Math.abs(b.cx-datX));
-      if(nums.length){ const n=parseInt(nums[0].text,10); if(n>=1&&n<=base.length) date=n; }
-      if(!date) continue;
-
-      const r = base[date-1];
-      cols.forEach(c=>{
-        if(anchors[c.key]===undefined) return; // header not found in photo — leave existing value
-        const w = nearest(row, anchors[c.key]);
-        if(!w) return;
-        if(c.key==='pjan'){
-          // PJAN is a partial-shift flag, not a shift code — just detect the mark.
-          r.pjan = /\*/.test(w.text) ? '*' : '';
-        } else {
-          r[c.key] = normShift(w.text);
-        }
-      });
-      if(anchors.OPM!==undefined){
-        const opWords = row.filter(w=>w.cx > anchors.OPM - medH)
-                           .map(w=>w.text).join(' ').trim();
-        if(opWords && !/^\d+$/.test(opWords)) r.op = opWords;
-      }
-      filled++;
-    }
-
-    if(filled===0) throw new Error('Geen dagen herkend. Probeer een scherpere foto recht van boven.');
-
-    store[m] = base;
-    try{ localStorage.setItem('r26_'+m, JSON.stringify(store[m])); }catch(e){}
-    set(`✅ ${filled} dagen ingelezen voor ${m}! <span style="color:var(--ts)">Controleer de waarden en klik een badge om te corrigeren.</span>`);
-    setTimeout(()=>render(), 1200);
-
-  } catch(err){
-    if(worker){ try{ await worker.terminate(); }catch(e){} }
-    window.__ocrCanvas = srcCanvas; window.__ocrMonth = m;
-    set(`⚠️ ${err.message}<br><br>
-      <button onclick="scanRoosterOCR(window.__ocrCanvas, window.__ocrMonth)"
-        style="padding:6px 18px;background:var(--accent);color:#fff;border:none;
-               border-radius:6px;font-weight:700;cursor:pointer;font-size:12px">
-        🔄 Opnieuw scannen
-      </button>`);
-  }
+function showImageFullscreen(src){
+  const overlay = document.createElement('div');
+  overlay.className = 'img-lightbox';
+  const img = document.createElement('img');
+  img.src = src; img.alt = 'Rooster foto (volledig scherm)';
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'img-lightbox-close'; closeBtn.textContent = '✕';
+  overlay.appendChild(img); overlay.appendChild(closeBtn);
+  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = e => { if(e.key==='Escape') close(); };
+  overlay.onclick = close;
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(overlay);
 }
 
 function processImageFile(file, m){
@@ -1210,56 +1073,36 @@ function processImageFile(file, m){
   reader.onload = ev => {
     const originalSrc = ev.target.result;
 
-    // ── Step 1: show image immediately ──
+    // Show the raw photo immediately, full quality, while it's being saved.
     const wrap = document.getElementById('uploadWrap');
     wrap.innerHTML = `
       <div class="img-wrap" id="preview-wrap">
         <img src="${originalSrc}" alt="Rooster foto"
              style="width:100%;border-radius:10px;border:1px solid var(--border);display:block;margin-bottom:10px">
         <button class="img-remove" onclick="removeUpload('${m}')">✕ Verwijder foto</button>
-      </div>
-      <div id="ai-status" style="text-align:center;padding:14px;font-size:12px;font-weight:600;
-           color:var(--acl);background:var(--card);border:1px solid var(--accent);
-           border-radius:8px;margin-bottom:10px;line-height:1.6">
-        ⏳ Afbeelding opslaan...
       </div>`;
+    const previewImg = wrap.querySelector('#preview-wrap img');
+    if(previewImg) previewImg.addEventListener('click', () => showImageFullscreen(previewImg.src));
 
-    // ── Step 2: save a preview, build a high-contrast OCR canvas, scan locally ──
+    // Downscale only if huge, to keep it well inside localStorage's quota —
+    // otherwise this is just the photo as uploaded, kept as the reference copy.
     const img = new Image();
     img.onload = () => {
-      // (a) Preview image for localStorage (small JPEG)
-      const PMAX = 1100;
+      const PMAX = 1600;
       let pw = img.width, ph = img.height;
       if(pw > PMAX){ ph = Math.round(ph * PMAX / pw); pw = PMAX; }
       const pc = document.createElement('canvas');
       pc.width = pw; pc.height = ph;
       pc.getContext('2d').drawImage(img, 0, 0, pw, ph);
-      try { localStorage.setItem('img_' + m, pc.toDataURL('image/jpeg', 0.82)); } catch(e) {}
-
-      // (b) Larger grayscale/contrast canvas for OCR accuracy
-      const OMAX = 1600;
-      let ow = img.width, oh = img.height;
-      if(ow > OMAX){ oh = Math.round(oh * OMAX / ow); ow = OMAX; }
-      const oc = document.createElement('canvas');
-      oc.width = ow; oc.height = oh;
-      const octx = oc.getContext('2d');
-      octx.drawImage(img, 0, 0, ow, oh);
-      const id = octx.getImageData(0, 0, ow, oh);
-      const px = id.data;
-      for(let i=0;i<px.length;i+=4){
-        // luminance → contrast stretch
-        let g = 0.299*px[i] + 0.587*px[i+1] + 0.114*px[i+2];
-        g = g < 140 ? Math.max(0, g-40) : Math.min(255, g+40);
-        px[i]=px[i+1]=px[i+2]=g;
+      try {
+        localStorage.setItem('img_' + m, pc.toDataURL('image/jpeg', 0.9));
+        toast('📸 Foto opgeslagen');
+      } catch(e) {
+        toast('⚠️ Foto opslaan mislukt (te groot)');
       }
-      octx.putImageData(id, 0, 0);
-
-      scanRoosterOCR(oc, m);
+      buildUpload(m);
     };
-    img.onerror = () => {
-      const status = document.getElementById('ai-status');
-      if(status) status.textContent = '⚠️ Afbeelding kon niet geladen worden.';
-    };
+    img.onerror = () => toast('⚠️ Afbeelding kon niet geladen worden.');
     img.src = originalSrc;
   };
   reader.readAsDataURL(file);
@@ -1283,6 +1126,8 @@ function buildUpload(m){
       <img src="${saved}" alt="Rooster ${m}" style="width:100%;border-radius:10px;border:1px solid var(--border);display:block">
       <button class="img-remove" onclick="removeUpload('${m}')">✕ Verwijder foto</button>`;
     wrap.appendChild(iw);
+    const savedImg = iw.querySelector('img');
+    savedImg.addEventListener('click', () => showImageFullscreen(savedImg.src));
   }
 
   // Upload zone (always visible)
@@ -1290,7 +1135,7 @@ function buildUpload(m){
   zone.innerHTML = `
     <div style="font-size:26px;margin-bottom:6px">${saved ? '🔄' : '📸'}</div>
     <p style="font-weight:700;color:var(--acl)">${saved ? 'Andere foto kiezen' : 'Upload Rooster Foto'}</p>
-    <span style="color:var(--ts)">🔍 Leest shifts automatisch in je browser — klik of sleep</span>`;
+    <span style="color:var(--ts)">Klik of sleep een foto hierheen</span>`;
 
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = 'image/*';
