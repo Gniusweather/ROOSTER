@@ -1034,7 +1034,7 @@ function setFilter(f){
 //  PHOTO UPLOAD + LOCAL OCR SCAN (no API, no server)
 //  Uses Tesseract.js entirely in the browser.
 // ══════════════════════════════════════════
-const KNOWN_SHIFTS = ['X','D','D*','A','KW','R','R=A','R=D','R=KW','VAK','VG','Z'];
+const KNOWN_SHIFTS = ['X','D','D*','A','KW','R','R=A','R=D','R=KW','VAK','VG','Z','X=D','X/D','D*+KW'];
 
 function levenshtein(a, b){
   const m=a.length, n=b.length;
@@ -1082,7 +1082,9 @@ async function scanRoosterOCR(srcCanvas, m){
     return;
   }
 
-  const idx = MONTHS.indexOf(m);
+  // Columns this month actually tracks — multi-person months (June/July/August)
+  // have more than just JPA/GMA2.
+  const cols = MULTI_PERSON_COLUMNS[m] || [{key:'jpa',label:'JPA'},{key:'gma2',label:'GMA2'}];
   let worker;
   try {
     set('🔍 OCR wordt geladen (eenmalig downloaden)...');
@@ -1108,15 +1110,27 @@ async function scanRoosterOCR(srcCanvas, m){
 
     if(words.length < 10) throw new Error('Te weinig tekst herkend — probeer een scherpere, rechte foto.');
 
-    // ── Detect column anchors from the header row ──
-    const HEADERS = {DAG:/^DAG$/i, DAT:/^DAT$/i, JPA:/^JPA$/i, GMA:/^GMA2?$/i, OPM:/^OPMERK/i};
+    // ── Detect column anchors from the header row: DAG/DAT/OPM plus whichever
+    // person columns this month tracks (JPA/GMA2 always; QPI/AYS/FCA/ECON/PJAN
+    // on multi-person months) ──
+    const COL_HEADER_RE = {
+      jpa:  /^JPA$/i,
+      gma2: /^GMA2?$/i,
+      qpi:  /^QPI$/i,
+      ays:  /^AYS$/i,
+      fca:  /^FCA$/i,
+      econ: /^ECON$/i,
+      pjan: /^PJAN$/i,
+    };
+    const HEADERS = {DAG:/^DAG$/i, DAT:/^DAT$/i, OPM:/^OPMERK/i};
+    cols.forEach(c=>{ if(COL_HEADER_RE[c.key]) HEADERS[c.key]=COL_HEADER_RE[c.key]; });
     const anchors = {};
     for(const w of words){
       for(const [key,re] of Object.entries(HEADERS)){
         if(re.test(w.text) && anchors[key]===undefined) anchors[key]=w.cx;
       }
     }
-    if(anchors.JPA===undefined || anchors.GMA===undefined)
+    if(anchors.jpa===undefined || anchors.gma2===undefined)
       throw new Error('Kon de JPA/GMA kolommen niet vinden in de foto. Maak een rechtere foto van de hele tabel.');
 
     // ── Cluster words into rows by vertical position ──
@@ -1129,8 +1143,11 @@ async function scanRoosterOCR(srcCanvas, m){
     }
     if(cur.length) rows.push(cur);
 
-    // ── Build month from a clean base; map OCR rows by their day number ──
-    const base = emptyMonth(idx);
+    // ── Start from the current data, not a blank template, so any column
+    // without a detected header (photo cropped tight, or a column just isn't
+    // in this month) keeps its existing value instead of being wiped. Only
+    // columns with a detected anchor get overwritten below. ──
+    const base = store[m].map(r=>({...r}));
     const nearest = (row, x) => {
       let best=null, bd=1e9;
       for(const w of row){ const d=Math.abs(w.cx-x); if(d<bd){bd=d; best=w;} }
@@ -1146,11 +1163,18 @@ async function scanRoosterOCR(srcCanvas, m){
       if(nums.length){ const n=parseInt(nums[0].text,10); if(n>=1&&n<=base.length) date=n; }
       if(!date) continue;
 
-      const jpaW = nearest(row, anchors.JPA);
-      const gmaW = nearest(row, anchors.GMA);
       const r = base[date-1];
-      if(jpaW) r.jpa  = normShift(jpaW.text);
-      if(gmaW) r.gma2 = normShift(gmaW.text);
+      cols.forEach(c=>{
+        if(anchors[c.key]===undefined) return; // header not found in photo — leave existing value
+        const w = nearest(row, anchors[c.key]);
+        if(!w) return;
+        if(c.key==='pjan'){
+          // PJAN is a partial-shift flag, not a shift code — just detect the mark.
+          r.pjan = /\*/.test(w.text) ? '*' : '';
+        } else {
+          r[c.key] = normShift(w.text);
+        }
+      });
       if(anchors.OPM!==undefined){
         const opWords = row.filter(w=>w.cx > anchors.OPM - medH)
                            .map(w=>w.text).join(' ').trim();
