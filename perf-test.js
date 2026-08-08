@@ -240,6 +240,13 @@ check("escapeHtml neutralises HTML", ctx.escapeHtml('<img src=x onerror="x">') =
 check("no OCR library or scan pipeline left in the page (photo upload is raw-only now)", !pageScript.includes("Tesseract") && !pageScript.includes("scanRoosterOCR") && !pageScript.includes("normShift"));
 check("photo reference image saved to localStorage", pageScript.includes("localStorage.setItem('img_'") || pageScript.includes("img_' + m"));
 check("uploaded photo opens fullscreen on click", pageScript.includes("showImageFullscreen") && pageScript.includes("img-lightbox"));
+{
+  ctx.setMode('2025');
+  ctx.render2025();
+  const html = documentStub.getElementById('monthDetails').innerHTML;
+  check("2025 detail-view photos also open fullscreen on click", html.includes('onclick="showImageFullscreen(this.src)"'), html.slice(0, 200));
+  ctx.setMode('2026');
+}
 
 // June & July both show all five person columns, GMA & JPA bold, in the required order
 for (const monthName of ['June', 'July']) {

@@ -1383,7 +1383,8 @@ function render2025(){
         <span>${m} 2025</span>
         <span style="font-family:'JetBrains Mono',monospace;color:#4ade80;font-size:13px">${mHrs}u</span>
       </summary>
-      ${imgSrc2025 ? `<img src="${imgSrc2025}" loading="lazy" decoding="async" style="width:100%;max-height:280px;object-fit:contain;border-bottom:1px solid var(--border);background:#000;display:block">` : ''}
+      ${imgSrc2025 ? `<img src="${imgSrc2025}" loading="lazy" decoding="async" onclick="showImageFullscreen(this.src)"
+             style="width:100%;max-height:280px;object-fit:contain;border-bottom:1px solid var(--border);background:#000;display:block;cursor:zoom-in">` : ''}
       <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:11px;font-family:'JetBrains Mono',monospace">
         <thead><tr style="background:var(--panel)">
