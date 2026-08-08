@@ -3,7 +3,7 @@
 A single-file, offline-capable web app for the observatory shift schedule
 (rooster) of persons **JPA** and **GMA2**, with a read-only 2025 year overview.
 
-**Live app:** https://gnius21.github.io/ROOSTER/
+**Live app:** https://gniusweather.github.io/ROOSTER/
 
 ## Features
 
