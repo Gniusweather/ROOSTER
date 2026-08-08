@@ -1175,7 +1175,7 @@ function hrs2025(v){
   if(!v) return 0;
   const s=v.toUpperCase().trim();
   if(s==='D*') return 8;
-  if(s==='D'||s==='X/D'||s==='X=D'||s==='KW=D'||s==='X/D') return 12;
+  if(s==='D'||s==='X/D'||s==='X=D'||s==='KW=D') return 12;
   if(s==='A') return 12;
   if(s==='KW'||s==='KW*') return 4;
   if(s==='R=A'||s==='R=D') return 12;
