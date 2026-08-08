@@ -158,13 +158,14 @@ const exportShim = `
 ;globalThis.__t = {
   MONTHS, MDAYS, PRESET, MONTHS2025, DATA2025, MULTI_PERSON_COLUMNS,
   emptyMonth, hrs, escapeHtml, badgeClass, calcTotals, breakdownKey, calc2025Yearly,
-  renderTableOnly, render, render2025, exportXlsx, export2025,
+  renderTableOnly, render, render2025, exportXlsx, export2025, clearMonth,
   undoPush, undoEdit, personsFor,
   setMultiView: (m,v) => { multiView[m] = v; },
   setCurrent: m => { current = m; },
   setMode: m => { mode = m; },
   getUndoStack: () => undoStack,
   getStore: () => store,
+  getTodayMonth: () => _todayMonth,
 };`;
 
 const tInit = process.hrtime.bigint();
@@ -315,48 +316,107 @@ check('calc2025Yearly avg < 5 ms', avg2025calc < 5, `${avg2025calc.toFixed(3)} m
 check('render2025 avg < 100 ms', avg2025 < 100, `${avg2025.toFixed(3)} ms`);
 check('exportXlsx avg < 25 ms', avgExport < 25, `${avgExport.toFixed(3)} ms`);
 
-console.log('\n=== Stale-cache migration (June/July schema upgrade) ===');
-{
-  // Simulate a device that cached June under the OLD 2-column schema
-  // (jpa/gma2 only, no qpi/ays/fca) before that feature existed, then
-  // verify a fresh script init discards the stale cache and loads the
-  // current 5-column preset instead of silently shadowing it forever.
-  const staleIdRegistry = new Map();
-  const staleElements = [];
-  const staleDocStub = {
-    createElement: tag => { const el = new StubElement(tag); staleElements.push(el); return el; },
-    getElementById: id => staleIdRegistry.get(id) || null,
-    querySelector: sel => staleElements.find(el => cssMatch(el, sel)) || null,
-    querySelectorAll: sel => staleElements.filter(el => cssMatch(el, sel)),
+// Boot a completely fresh copy of the page (own DOM stub + own localStorage),
+// so tests can exercise load-time behaviour: cache migration, a wipe surviving
+// a reload, or what the app does when the real-world clock isn't 2026.
+function freshInstance(storageEntries = {}, overrides = {}) {
+  const reg = new Map();
+  const els = [];
+  const docStub = {
+    createElement: tag => { const el = new StubElement(tag); els.push(el); return el; },
+    getElementById: id => reg.get(id) || null,
+    querySelector: sel => els.find(el => cssMatch(el, sel)) || null,
+    querySelectorAll: sel => els.filter(el => cssMatch(el, sel)),
   };
   for (const id of ['tabs','personCards','uploadWrap','thead','tbody','hTitle','hSub','toast','f-all','f-jpa','f-gma']) {
-    const el = new StubElement('div'); el.id = id; staleElements.push(el); staleIdRegistry.set(id, el);
+    const el = new StubElement('div'); el.id = id; els.push(el); reg.set(id, el);
   }
-  const staleFilterRow = new StubElement('div'); staleFilterRow.className = 'filter-row'; staleElements.push(staleFilterRow);
+  const fr = new StubElement('div'); fr.className = 'filter-row'; els.push(fr);
 
-  const staleStorage = new Map();
-  const staleJune = Array.from({ length: 30 }, (_, i) => ({ date: i + 1, day: 'MA', jpa: 'X', gma2: 'X', op: '' }));
-  staleStorage.set('r26_June', JSON.stringify(staleJune));
-
-  const staleSandbox = {
-    document: staleDocStub,
+  const storage = new Map(Object.entries(storageEntries));
+  const sb = {
+    document: docStub,
     localStorage: {
-      getItem: k => (staleStorage.has(k) ? staleStorage.get(k) : null),
-      setItem: (k, v) => staleStorage.set(k, String(v)),
-      removeItem: k => staleStorage.delete(k),
+      getItem: k => (storage.has(k) ? storage.get(k) : null),
+      setItem: (k, v) => storage.set(k, String(v)),
+      removeItem: k => storage.delete(k),
     },
     XLSX: { utils: { book_new: () => ({}), aoa_to_sheet: r => ({ r }), book_append_sheet: () => {} }, writeFile: () => {} },
     setTimeout: () => 0, clearTimeout: () => {}, confirm: () => false, prompt: () => null, alert: () => {},
     navigator: { serviceWorker: { register: () => Promise.resolve() } },
     fetch: () => Promise.reject(new Error('no network in test')),
     console,
+    ...overrides,
   };
-  vm.createContext(staleSandbox);
-  vm.runInContext(pageScript + exportShim, staleSandbox, { filename: 'index.html#script(migration-test)' });
+  vm.createContext(sb);
+  vm.runInContext(pageScript + exportShim, sb, { filename: 'index.html#script(fresh-instance)' });
+  return { t: sb.__t, storage, sandbox: sb };
+}
 
-  const migratedJune = staleSandbox.__t.getStore().June;
+console.log('\n=== Stale-cache migration (multi-person schema upgrade) ===');
+{
+  // Simulate a device that cached June under the OLD 2-column schema
+  // (jpa/gma2 only, no qpi/ays/fca) before that feature existed, then
+  // verify a fresh script init discards the stale cache and loads the
+  // current 5-column preset instead of silently shadowing it forever.
+  const staleJune = Array.from({ length: 30 }, (_, i) => ({ date: i + 1, day: 'MA', jpa: 'X', gma2: 'X', op: '' }));
+  const migratedJune = freshInstance({ r26_June: JSON.stringify(staleJune) }).t.getStore().June;
   check('stale pre-migration June cache is discarded on load', 'qpi' in migratedJune[0], `keys: ${Object.keys(migratedJune[0]).join(',')}`);
   check('migrated June day 4 carries the corrected preset values', migratedJune[3].jpa === 'KW' && migratedJune[3].gma2 === 'Z', `jpa=${migratedJune[3].jpa} gma2=${migratedJune[3].gma2}`);
+}
+
+console.log('\n=== Wis maand (clear month) ===');
+{
+  check('emptyMonth carries every column a multi-person month tracks',
+    ['gma2','jpa','qpi','ays','fca','econ','pjan'].every(k => k in ctx.emptyMonth(7)[0]),
+    Object.keys(ctx.emptyMonth(7)[0]).join(','));
+  check('emptyMonth for a 2-person month is unchanged',
+    ['jpa','gma2','op'].every(k => k in ctx.emptyMonth(8)[0]) && !('qpi' in ctx.emptyMonth(8)[0]),
+    Object.keys(ctx.emptyMonth(8)[0]).join(','));
+
+  const inst = freshInstance({}, { confirm: () => true });
+  inst.t.setCurrent('August');
+  inst.t.clearMonth();
+  check('clearMonth persists the wipe to localStorage (it never saved before)', inst.storage.has('r26_August'));
+
+  // The wipe has to survive a reload — previously the month was cleared only
+  // in memory, so the old data reappeared on the next page load.
+  const reloaded = freshInstance({ r26_August: inst.storage.get('r26_August') }).t.getStore().August;
+  check('cleared month stays cleared after a reload',
+    reloaded.length === 31 && reloaded.every(r => !r.jpa && !r.gma2 && !r.qpi && !r.ays && !r.fca && !r.econ && !r.pjan),
+    JSON.stringify(reloaded[0]));
+}
+
+console.log('\n=== "Vandaag" marker is year-aware ===');
+{
+  const fakeClock = (y, mo, d) => class extends Date {
+    constructor(...a) { if (a.length === 0) super(y, mo, d); else super(...a); }
+  };
+  check("today marker is set when the real date is inside 2026",
+    freshInstance({}, { Date: fakeClock(2026, 7, 8) }).t.getTodayMonth() === 'August');
+  check("no day is marked 'Vandaag' once the real year leaves 2026",
+    freshInstance({}, { Date: fakeClock(2027, 7, 8) }).t.getTodayMonth() === null);
+}
+
+console.log('\n=== Excel export covers every tracked column ===');
+{
+  const inst = freshInstance();
+  let sheet = null;
+  inst.sandbox.XLSX.utils.aoa_to_sheet = rows => { sheet = rows; return { rows }; };
+
+  inst.t.setCurrent('August');
+  inst.t.exportXlsx();
+  const augHeader = sheet[0];
+  check('August export includes QPI/AYS/FCA/ECON/PJAN (silently dropped before)',
+    ['QPI','AYS','FCA','ECON','PJAN'].every(l => augHeader.includes(l)), augHeader.join('|'));
+  check('PJAN gets no "Uren" column (it is a flag, not a shift)', !augHeader.includes('PJAN Uren'), augHeader.join('|'));
+  check('every August export row matches the header width',
+    sheet.every(r => r.length === augHeader.length), `header ${augHeader.length}, rows ${[...new Set(sheet.map(r => r.length))].join('/')}`);
+
+  inst.t.setCurrent('May');
+  inst.t.exportXlsx();
+  check('2-person month export keeps its original columns',
+    sheet[0].join(',') === 'DAT,DAG,JPA,JPA Uren,GMA2,GMA2 Uren,OPMERKING', sheet[0].join(','));
 }
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

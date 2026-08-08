@@ -166,7 +166,7 @@ body {
 }
 .img-lightbox img {
   max-width: 100%; max-height: 100%; object-fit: contain;
-  border-radius: 8px;
+  border-radius: 8px; cursor: default;
 }
 .img-lightbox-close {
   position: absolute; top: 16px; right: 20px;
@@ -899,9 +899,16 @@ function undoEdit(){
 }
 
 function emptyMonth(idx){
-  return Array.from({length:MDAYS[idx]},(_,i)=>({
-    date:i+1, day:DNAMES[(new Date(2026, idx, i+1).getDay()+6)%7], jpa:'', gma2:'', op:''
-  }));
+  // Blank rows must carry every column this month tracks — a multi-person
+  // month built with only jpa/gma2 would render blank cells for the rest and
+  // then be thrown away by the stale-cache check on the next load.
+  const cols = MULTI_PERSON_COLUMNS[MONTHS[idx]] || [{key:'jpa'},{key:'gma2'}];
+  return Array.from({length:MDAYS[idx]},(_,i)=>{
+    const row = {date:i+1, day:DNAMES[(new Date(2026, idx, i+1).getDay()+6)%7]};
+    cols.forEach(c=>{ row[c.key]=''; });
+    row.op='';
+    return row;
+  });
 }
 
 // ══════════════════════════════════════════
@@ -1057,11 +1064,22 @@ function showImageFullscreen(src){
   img.src = src; img.alt = 'Rooster foto (volledig scherm)';
   const closeBtn = document.createElement('button');
   closeBtn.className = 'img-lightbox-close'; closeBtn.textContent = '✕';
+  closeBtn.title = 'Sluiten (Esc)';
   overlay.appendChild(img); overlay.appendChild(closeBtn);
-  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+
+  const prevOverflow = document.body.style.overflow;
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+    document.body.style.overflow = prevOverflow;   // let the page scroll again
+  };
   const onKey = e => { if(e.key==='Escape') close(); };
-  overlay.onclick = close;
+  // Clicking the photo itself must NOT close it — you're usually zooming in to
+  // read the thing. Only the backdrop, the ✕ button, or Escape close it.
+  img.addEventListener('click', e => e.stopPropagation());
+  overlay.addEventListener('click', close);
   document.addEventListener('keydown', onKey);
+  document.body.style.overflow = 'hidden';
   document.body.appendChild(overlay);
 }
 
@@ -1684,11 +1702,36 @@ function refreshCards(){
 // ══════════════════════════════════════════
 function exportXlsx(){
   const m=current;
-  const rows=store[m].map(r=>[r.date,r.day,r.jpa,hrs(r.jpa)+'u',r.gma2,hrs(r.gma2)+'u',r.op||'']);
-  const t=calcTotals(m);
-  rows.push(['TOTAAL','','',t.jpa+'u','',t.gma+'u','']);
-  const ws=XLSX.utils.aoa_to_sheet([['DAT','DAG','JPA','JPA Uren','GMA2','GMA2 Uren','OPMERKING'],...rows]);
-  ws['!cols']=[{wch:5},{wch:5},{wch:8},{wch:8},{wch:8},{wch:9},{wch:18}];
+  // Export every column this month tracks, not just JPA/GMA2 — otherwise a
+  // multi-person month (June/July/August) loses QPI/AYS/FCA/ECON/PJAN.
+  // PJAN is a flag column with no hours, so it gets no "Uren" companion.
+  const cols = MULTI_PERSON_COLUMNS[m] || [{key:'jpa',label:'JPA'},{key:'gma2',label:'GMA2'}];
+  const hasHrs = c => c.key!=='pjan';
+
+  const header=['DAT','DAG'];
+  cols.forEach(c=>{ header.push(c.label); if(hasHrs(c)) header.push(c.label+' Uren'); });
+  header.push('OPMERKING');
+
+  const rows=store[m].map(r=>{
+    const out=[r.date,r.day];
+    cols.forEach(c=>{ const v=r[c.key]||''; out.push(v); if(hasHrs(c)) out.push(hrs(v)+'u'); });
+    out.push(r.op||'');
+    return out;
+  });
+
+  const totals=['TOTAAL',''];
+  cols.forEach(c=>{
+    totals.push('');
+    if(hasHrs(c)) totals.push(store[m].reduce((s,r)=>s+hrs(r[c.key]),0)+'u');
+  });
+  totals.push('');
+  rows.push(totals);
+
+  const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
+  const widths=[{wch:5},{wch:5}];
+  cols.forEach(c=>{ widths.push({wch:8}); if(hasHrs(c)) widths.push({wch:9}); });
+  widths.push({wch:18});
+  ws['!cols']=widths;
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,m);
   XLSX.writeFile(wb,`Rooster_${m}_2026.xlsx`);
@@ -1698,6 +1741,7 @@ function exportXlsx(){
 function clearMonth(){
   if(!confirm(`Alle data voor ${current} wissen?`)) return;
   store[current]=emptyMonth(MONTHS.indexOf(current));
+  save(current);   // without this the wipe never persisted — a reload brought the old data back
   toast('🗑️ Maand gewist');
   render();
 }
@@ -1716,11 +1760,13 @@ function toast(msg){
 //  INIT
 // ══════════════════════════════════════════
 const _today      = new Date();
-const _todayMonth = MONTHS[_today.getMonth()]; // index-based, always correct
+// The planner is for 2026 only — mark "Vandaag" solely when the real date
+// falls in 2026, otherwise e.g. 8 Aug 2027 would light up the 8 Aug 2026 row.
+const _todayMonth = _today.getFullYear()===2026 ? MONTHS[_today.getMonth()] : null;
 const _todayDate  = _today.getDate();
 
-// Start on the current real month
-if(MONTHS.includes(_todayMonth)) current = _todayMonth;
+// Open on the current calendar month (handy for browsing in any year)
+current = MONTHS[_today.getMonth()];
 
 buildTabs();
 render();
