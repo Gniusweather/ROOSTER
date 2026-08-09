@@ -1,0 +1,47 @@
+name: GMA shift notifications
+
+# Pushes a notification to ntfy.sh (https://ntfy.sh/${{ secrets.NTFY_TOPIC }})
+# when GMA has a shift coming up. There's no server behind this app — this
+# workflow IS the "server": GitHub runs it on a schedule, it reads the
+# rooster data straight out of index.html, and pings ntfy when it's time.
+#
+# All schedule times below are UTC. Local time is America/Puerto_Rico
+# (AST, UTC-4, no DST), so UTC = local + 4 hours year-round:
+#   11:05 UTC = 07:05 AST -> 1h-before check for 08:00-start shifts (D, KW, R=D, R=KW, X=D, D*+KW)
+#   15:05 UTC = 11:05 AST -> 1h-before check for 12:00-start shifts (D*)
+#   23:05 UTC = 19:05 AST -> 1h-before check for 20:00-start shifts (A, R=A)
+#   22:05 UTC = 18:05 AST -> day-before check for tomorrow's shift (any code)
+# Minutes are offset from :00 on purpose — GitHub's own docs note jobs
+# scheduled for the top of the hour are more likely to be delayed.
+#
+# IMPORTANT LIMITATION: this only knows the *published* PRESET schedule
+# baked into index.html. Edits made by clicking badges in someone's own
+# browser live only in that browser's localStorage and are never visible
+# here — a shift swapped locally won't change which day this notifies for.
+on:
+  schedule:
+    - cron: '5 11 * * *'
+    - cron: '5 15 * * *'
+    - cron: '5 22 * * *'
+    - cron: '5 23 * * *'
+  workflow_dispatch:
+    inputs:
+      test:
+        description: 'Send one guaranteed test notification instead of checking the schedule'
+        type: boolean
+        default: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check schedule and notify via ntfy
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule }}
+          TEST_MODE: ${{ inputs.test }}
+        run: node .github/scripts/notify-gma.js
