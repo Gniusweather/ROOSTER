@@ -1684,7 +1684,7 @@ function personCard(name, days, total, brk, filterKey){
           <span style="font-size:10px;font-weight:700;color:var(--ts)">TOTAAL</span>
           <span style="font-size:13px;font-weight:900;color:${accent};font-family:'JetBrains Mono',monospace">${total}u</span>
         </div>
-        <div class="person-card-detail" style="margin-top:8px" onclick="event.stopPropagation();setFilter('${filterKey}')">↓ Filter tabel op ${name}</div>
+        ${MULTI_PERSON_MONTHS.includes(current) ? '' : `<div class="person-card-detail" style="margin-top:8px" onclick="event.stopPropagation();setFilter('${filterKey}')">↓ Filter tabel op ${name}</div>`}
       </div>
     </details>
   </div>`;
@@ -1767,7 +1767,12 @@ const SHIFT_TIMES = {
 };
 
 function icsEscape(s){
-  return String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
+  // Order matters: backslash first, or the escapes added below would get
+  // double-escaped. \r\n / lone \r / lone \n all normalize to the same
+  // escaped \n — an unescaped bare \r left in a free-typed remark could
+  // otherwise look like a stray line break to a parser, since the file's
+  // real lines are joined with \r\n.
+  return String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r\n|\r|\n/g,'\\n');
 }
 
 // Floating local time (no Z / TZID) — the shift is "8am wherever the phone

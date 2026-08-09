@@ -159,7 +159,7 @@ const exportShim = `
 ;globalThis.__t = {
   MONTHS, MDAYS, PRESET, MONTHS2025, DATA2025, MULTI_PERSON_COLUMNS,
   emptyMonth, hrs, escapeHtml, badgeClass, calcTotals, breakdownKey, calc2025Yearly,
-  renderTableOnly, render, render2025, exportXlsx, export2025, exportCalendarGma, clearMonth,
+  renderTableOnly, render, render2025, exportXlsx, export2025, exportCalendarGma, icsEscape, clearMonth,
   undoPush, undoEdit, personsFor,
   setMultiView: (m,v) => { multiView[m] = v; },
   setCurrent: m => { current = m; },
@@ -284,6 +284,18 @@ check("June calcTotals.jpa matches manual per-row sum (jpa/gma2 untouched)", jun
   check("August 'GMA+JPA only' view shows exactly GMA then JPA", two.map(p=>p.label).join(',') === 'GMA,JPA', two.map(p=>p.label).join(','));
   ctx.setMultiView('August', 'all');
   check("August toggling back to 'all' restores 7 columns", ctx.personsFor('August').length === 7);
+
+  // Person cards' "↓ Filter tabel op X" link calls setFilter(), but multi-person
+  // months never consult `filter` (they use multiView instead) — the link did
+  // nothing there. It should be hidden on multi-person months, present elsewhere.
+  ctx.setCurrent('June');
+  ctx.render();
+  check("multi-person month hides the dead 'Filter tabel op' link", !documentStub.getElementById('personCards').innerHTML.includes('Filter tabel op'));
+  ctx.setCurrent('May');
+  ctx.render();
+  check("2-person month still shows a working 'Filter tabel op' link for both cards",
+    documentStub.getElementById('personCards').innerHTML.includes('Filter tabel op JPA') &&
+    documentStub.getElementById('personCards').innerHTML.includes('Filter tabel op GMA2'));
 
   // JPA's D*+KW combined shift (Aug 14) must count as worked hours, not silently drop to 0
   check("hrs('D*+KW') === 12 (D* 8u + KW 4u)", ctx.hrs('D*+KW') === 12, `got ${ctx.hrs('D*+KW')}`);
@@ -458,6 +470,11 @@ console.log('\n=== GMA calendar export (.ics) ===');
   check('alarms trigger at -P1D and -PT1H', ics.includes('TRIGGER:-P1D') && ics.includes('TRIGGER:-PT1H'));
   check('uses floating local time, not UTC (shift times are wall-clock, not zone-specific)',
     !/DTSTART:\d{8}T\d{6}Z/.test(ics) && /DTSTART:\d{8}T\d{6}\r?\n/.test(ics));
+
+  check("icsEscape escapes backslash/semicolon/comma", ctx.icsEscape('a\\b;c,d') === 'a\\\\b\\;c\\,d', ctx.icsEscape('a\\b;c,d'));
+  check("icsEscape normalizes \\r\\n and bare \\n to the same escaped \\n", ctx.icsEscape('a\r\nb') === ctx.icsEscape('a\nb'));
+  check("icsEscape escapes a bare \\r too (not just \\r\\n) — a lone CR could otherwise look like a stray line break",
+    ctx.icsEscape('a\rb') === 'a\\nb', JSON.stringify(ctx.icsEscape('a\rb')));
 
   // Day shift (D): 08:00-20:00 same day
   const dEvent = ics.split('BEGIN:VEVENT').find(e => e.includes('20260824'));
