@@ -74,6 +74,7 @@ class StubElement {
     }
   }
   appendChild(c) { this.children.push(c); return c; }
+  remove() {}
   addEventListener() {}
   scrollIntoView() {}
   querySelectorAll() { return []; }
@@ -158,7 +159,7 @@ const exportShim = `
 ;globalThis.__t = {
   MONTHS, MDAYS, PRESET, MONTHS2025, DATA2025, MULTI_PERSON_COLUMNS,
   emptyMonth, hrs, escapeHtml, badgeClass, calcTotals, breakdownKey, calc2025Yearly,
-  renderTableOnly, render, render2025, exportXlsx, export2025, clearMonth,
+  renderTableOnly, render, render2025, exportXlsx, export2025, exportCalendarGma, clearMonth,
   undoPush, undoEdit, personsFor,
   setMultiView: (m,v) => { multiView[m] = v; },
   setCurrent: m => { current = m; },
@@ -329,11 +330,23 @@ check('exportXlsx avg < 25 ms', avgExport < 25, `${avgExport.toFixed(3)} ms`);
 function freshInstance(storageEntries = {}, overrides = {}) {
   const reg = new Map();
   const els = [];
+  const lastDownload = { filename: null, blobParts: null };
   const docStub = {
-    createElement: tag => { const el = new StubElement(tag); els.push(el); return el; },
+    createElement: tag => {
+      const el = new StubElement(tag); els.push(el);
+      if (tag === 'a') {
+        // Capture download-link clicks (exportXlsx/exportCalendarGma use this
+        // pattern) instead of touching the real filesystem or DOM.
+        el._dl = '';
+        Object.defineProperty(el, 'download', { get() { return this._dl; }, set(v) { this._dl = v; lastDownload.filename = v; } });
+        el.click = () => {};
+      }
+      return el;
+    },
     getElementById: id => reg.get(id) || null,
     querySelector: sel => els.find(el => cssMatch(el, sel)) || null,
     querySelectorAll: sel => els.filter(el => cssMatch(el, sel)),
+    body: { appendChild: () => {}, style: {} },
   };
   for (const id of ['tabs','personCards','uploadWrap','thead','tbody','hTitle','hSub','toast','f-all','f-jpa','f-gma']) {
     const el = new StubElement('div'); el.id = id; els.push(el); reg.set(id, el);
@@ -349,6 +362,8 @@ function freshInstance(storageEntries = {}, overrides = {}) {
       removeItem: k => storage.delete(k),
     },
     XLSX: { utils: { book_new: () => ({}), aoa_to_sheet: r => ({ r }), book_append_sheet: () => {} }, writeFile: () => {} },
+    Blob: function (parts, opts) { lastDownload.blobParts = parts; this.type = opts && opts.type; },
+    URL: { createObjectURL: () => 'blob:fake', revokeObjectURL: () => {} },
     setTimeout: () => 0, clearTimeout: () => {}, confirm: () => false, prompt: () => null, alert: () => {},
     navigator: { serviceWorker: { register: () => Promise.resolve() } },
     fetch: () => Promise.reject(new Error('no network in test')),
@@ -357,7 +372,7 @@ function freshInstance(storageEntries = {}, overrides = {}) {
   };
   vm.createContext(sb);
   vm.runInContext(pageScript + exportShim, sb, { filename: 'index.html#script(fresh-instance)' });
-  return { t: sb.__t, storage, sandbox: sb };
+  return { t: sb.__t, storage, sandbox: sb, lastDownload };
 }
 
 console.log('\n=== Stale-cache migration (multi-person schema upgrade) ===');
@@ -424,6 +439,45 @@ console.log('\n=== Excel export covers every tracked column ===');
   inst.t.exportXlsx();
   check('2-person month export keeps its original columns',
     sheet[0].join(',') === 'DAT,DAG,JPA,JPA Uren,GMA2,GMA2 Uren,OPMERKING', sheet[0].join(','));
+}
+
+console.log('\n=== GMA calendar export (.ics) ===');
+{
+  const inst = freshInstance();
+  inst.t.setCurrent('August');
+  inst.t.exportCalendarGma();
+  const ics = inst.lastDownload.blobParts[0];
+  const expectedDays = ctx.PRESET.August.filter(r => ctx.hrs(r.gma2) > 0).length;
+
+  check('.ics filename names the month', inst.lastDownload.filename === 'GMA_Rooster_August_2026.ics', inst.lastDownload.filename);
+  check('.ics is a valid VCALENDAR wrapper', ics.startsWith('BEGIN:VCALENDAR') && ics.trim().endsWith('END:VCALENDAR'));
+  check('one VEVENT per day GMA actually works (hrs(gma2) > 0)',
+    (ics.match(/BEGIN:VEVENT/g) || []).length === expectedDays, `got ${(ics.match(/BEGIN:VEVENT/g) || []).length}, expected ${expectedDays}`);
+  check('every VEVENT carries exactly 2 VALARMs (day-before + hour-before)',
+    (ics.match(/BEGIN:VALARM/g) || []).length === expectedDays * 2);
+  check('alarms trigger at -P1D and -PT1H', ics.includes('TRIGGER:-P1D') && ics.includes('TRIGGER:-PT1H'));
+  check('uses floating local time, not UTC (shift times are wall-clock, not zone-specific)',
+    !/DTSTART:\d{8}T\d{6}Z/.test(ics) && /DTSTART:\d{8}T\d{6}\r?\n/.test(ics));
+
+  // Day shift (D): 08:00-20:00 same day
+  const dEvent = ics.split('BEGIN:VEVENT').find(e => e.includes('20260824'));
+  check("'D' shift runs 08:00–20:00", dEvent.includes('DTSTART:20260824T080000') && dEvent.includes('DTEND:20260824T200000'), dEvent);
+
+  // Overnight shift (A): 20:00 today -> 08:00 the next calendar day
+  const inst2 = freshInstance();
+  inst2.t.setCurrent('May');
+  inst2.t.getStore().May[9].gma2 = 'A'; // May 10
+  inst2.t.exportCalendarGma();
+  const overnight = inst2.lastDownload.blobParts[0].split('BEGIN:VEVENT').find(e => e.includes('20260510'));
+  check("'A' shift spans midnight correctly (20:00 -> 08:00 next day)",
+    overnight.includes('DTSTART:20260510T200000') && overnight.includes('DTEND:20260511T080000'), overnight);
+
+  // A month with zero GMA work-hours must not export an empty/broken file
+  const inst3 = freshInstance();
+  inst3.t.setCurrent('August');
+  inst3.t.getStore().August.forEach(r => { r.gma2 = 'X'; });
+  inst3.t.exportCalendarGma();
+  check('a month with no GMA shifts exports nothing (no blob written)', inst3.lastDownload.blobParts === null, JSON.stringify(inst3.lastDownload));
 }
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

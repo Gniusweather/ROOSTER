@@ -350,6 +350,7 @@ tbody tr.today td.dt-num-wrap .dt-num {
 
   <div class="actions">
     <button class="btn btn-orange" onclick="exportXlsx()">📥 Export Excel</button>
+    <button class="btn btn-ghost"  onclick="exportCalendarGma()">📅 Kalender (GMA)</button>
     <button class="btn btn-ghost"  onclick="clearMonth()">🗑️ Wis maand</button>
     <button class="btn btn-ghost" id="undoBtn" onclick="undoEdit()" disabled>↩ Ongedaan</button>
   </div>
@@ -1494,6 +1495,7 @@ function render(){
       <div class="upload-wrap" id="uploadWrap"></div>
       <div class="actions">
         <button class="btn btn-orange" onclick="exportXlsx()">📥 Export Excel</button>
+        <button class="btn btn-ghost"  onclick="exportCalendarGma()">📅 Kalender (GMA)</button>
         <button class="btn btn-ghost"  onclick="clearMonth()">🗑️ Wis maand</button>
         <button class="btn btn-ghost" id="undoBtn" onclick="undoEdit()" ${undoStack.length ? '' : 'disabled'}>↩ Ongedaan</button>
       </div>`;
@@ -1737,6 +1739,102 @@ function exportXlsx(){
   XLSX.utils.book_append_sheet(wb,ws,m);
   XLSX.writeFile(wb,`Rooster_${m}_2026.xlsx`);
   toast('✅ Excel geëxporteerd!');
+}
+
+// ══════════════════════════════════════════
+//  CALENDAR EXPORT (.ics — import into iOS/Google/Outlook Calendar)
+//  No server involved: real "push" notifications would need one to schedule
+//  and deliver alerts while the app is closed, which this app deliberately
+//  doesn't have. A calendar alarm does the same job natively and reliably —
+//  each work day becomes an event with a day-before and hour-before alert,
+//  and the phone's own Calendar app handles firing them from then on.
+// ══════════════════════════════════════════
+
+// Real clock times per shift, used to place each event and count the alarms
+// back from. A code with hrs()>0 but no entry here (a future new code) still
+// gets an event — it just falls back to an 08:00 start for its known duration.
+const SHIFT_TIMES = {
+  D:       {startH:8,  durH:12},
+  'D*':    {startH:12, durH:8},
+  A:       {startH:20, durH:12}, // overnight — ends 08:00 the next day
+  KW:      {startH:8,  durH:4},
+  'R=A':   {startH:20, durH:12},
+  'R=D':   {startH:8,  durH:12},
+  'R=KW':  {startH:8,  durH:4},
+  'X=D':   {startH:8,  durH:12},
+  'X/D':   {startH:8,  durH:12},
+  'D*+KW': {startH:8,  durH:12},
+};
+
+function icsEscape(s){
+  return String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
+}
+
+// Floating local time (no Z / TZID) — the shift is "8am wherever the phone
+// is", so this intentionally avoids guessing a specific IANA timezone.
+function icsLocal(d){
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
+}
+
+function icsUtcNow(){
+  return new Date().toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
+}
+
+function exportCalendarGma(){
+  const m = current;
+  const idx = MONTHS.indexOf(m);
+  const events = [];
+
+  store[m].forEach(row=>{
+    const code = (row.gma2||'').toUpperCase().trim();
+    const h = hrs(code);
+    if(h<=0) return; // X, VAK, Z, R, VG, blank, ... — nothing to work, nothing to alert on
+
+    const times = SHIFT_TIMES[code] || {startH:8, durH:h};
+    const start = new Date(2026, idx, row.date, times.startH, 0, 0);
+    const end   = new Date(start.getTime() + times.durH*3600*1000);
+    events.push({
+      uid: `gma-2026-${idx}-${row.date}@rooster-observatoren`,
+      start, end,
+      summary: `GMA dienst (${code})${row.op ? ' — '+row.op : ''}`,
+    });
+  });
+
+  if(events.length===0){ toast('⚠️ Geen GMA diensten deze maand'); return; }
+
+  const now = icsUtcNow();
+  const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Rooster Observatoren//NL','CALSCALE:GREGORIAN'];
+  events.forEach(e=>{
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:${e.uid}`,
+      `DTSTAMP:${now}`,
+      `DTSTART:${icsLocal(e.start)}`,
+      `DTEND:${icsLocal(e.end)}`,
+      `SUMMARY:${icsEscape(e.summary)}`,
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${icsEscape(e.summary)} — morgen`,
+      'TRIGGER:-P1D',
+      'END:VALARM',
+      'BEGIN:VALARM',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${icsEscape(e.summary)} — over 1 uur`,
+      'TRIGGER:-PT1H',
+      'END:VALARM',
+      'END:VEVENT'
+    );
+  });
+  lines.push('END:VCALENDAR');
+
+  const blob = new Blob([lines.join('\r\n')], {type:'text/calendar;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `GMA_Rooster_${m}_2026.ics`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast(`📅 ${events.length} diensten geëxporteerd naar kalender!`);
 }
 
 function clearMonth(){
