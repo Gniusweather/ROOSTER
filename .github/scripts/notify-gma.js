@@ -24,10 +24,15 @@ async function notify(title, message, tags) {
     console.log(`[skip: NTFY_TOPIC secret not set] ${title}: ${message}`);
     return;
   }
+  // HTTP header values must be Latin-1 — fetch() throws (not silently mangles)
+  // on anything outside that range. Titles here are meant to be plain ASCII,
+  // but strip defensively rather than let a future stray "—" or accent crash
+  // every real notification while only the ASCII test message keeps working.
+  const safeTitle = title.replace(/[^\x00-\xFF]/g, '?');
   const res = await fetch(`https://ntfy.sh/${TOPIC}`, {
     method: 'POST',
     headers: {
-      'Title': title,               // ASCII-only — ntfy headers don't accept UTF-8
+      'Title': safeTitle,
       'Priority': 'high',
       'Tags': tags || 'alarm_clock',
     },
@@ -177,7 +182,7 @@ async function main() {
     if (s && isHourCheck(s.startHour)) {
       const remark = s.op ? ` (${s.op})` : '';
       await notify(
-        'GMA — dienst over 1 uur',
+        'GMA - dienst over 1 uur',
         `${s.code} begint om ${String(s.startHour).padStart(2, '0')}:00 vandaag${remark}.`,
         'alarm_clock'
       );
@@ -193,7 +198,7 @@ async function main() {
     if (s) {
       const remark = s.op ? ` (${s.op})` : '';
       await notify(
-        'GMA — dienst morgen',
+        'GMA - dienst morgen',
         `${s.code} om ${String(s.startHour).padStart(2, '0')}:00 op ${fmtDate(tomorrow)}${remark}.`,
         'calendar'
       );

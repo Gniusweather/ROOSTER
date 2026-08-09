@@ -18,7 +18,7 @@ name: GMA shift notifications
 # baked into index.html. Edits made by clicking badges in someone's own
 # browser live only in that browser's localStorage and are never visible
 # here — a shift swapped locally won't change which day this notifies for.
-on:
+"on":
   schedule:
     - cron: '5 11 * * *'
     - cron: '5 15 * * *'
