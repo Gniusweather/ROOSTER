@@ -149,30 +149,12 @@ body {
 .img-wrap img {
   width: 100%; max-height: 260px; object-fit: contain;
   border-radius: 10px; border: 1px solid var(--border); display: block;
-  cursor: zoom-in;
 }
 .img-remove {
   position: absolute; top: 8px; right: 8px;
   background: rgba(239,68,68,0.85); color: #fff; border: none;
   border-radius: 6px; padding: 4px 10px; font-size: 11px;
   font-weight: 700; cursor: pointer; font-family: 'Inter', sans-serif;
-}
-
-/* ── IMAGE LIGHTBOX (fullscreen photo view) ── */
-.img-lightbox {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.92);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 1000; cursor: zoom-out; padding: 24px;
-}
-.img-lightbox img {
-  max-width: 100%; max-height: 100%; object-fit: contain;
-  border-radius: 8px; cursor: default;
-}
-.img-lightbox-close {
-  position: absolute; top: 16px; right: 20px;
-  background: rgba(255,255,255,0.1); color: #fff; border: none;
-  width: 36px; height: 36px; border-radius: 50%; font-size: 18px;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
 
 /* ── TABLE ── */
@@ -350,7 +332,6 @@ tbody tr.today td.dt-num-wrap .dt-num {
 
   <div class="actions">
     <button class="btn btn-orange" onclick="exportXlsx()">📥 Export Excel</button>
-    <button class="btn btn-ghost"  onclick="exportCalendarGma()">📅 Kalender (GMA)</button>
     <button class="btn btn-ghost"  onclick="clearMonth()">🗑️ Wis maand</button>
     <button class="btn btn-ghost" id="undoBtn" onclick="undoEdit()" disabled>↩ Ongedaan</button>
   </div>
@@ -359,6 +340,7 @@ tbody tr.today td.dt-num-wrap .dt-num {
 <div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 // ══════════════════════════════════════════
 //  CONFIG
@@ -638,6 +620,39 @@ const PRESET = {
     {date:29,day:'ZA',qpi:'R',    jpa:'X',      ays:'A',    fca:'D',    gma2:'X',   econ:'',   pjan:'',  op:''},
     {date:30,day:'ZO',qpi:'R',    jpa:'D',      ays:'X',    fca:'A',    gma2:'X',   econ:'',   pjan:'',  op:''},
     {date:31,day:'MA',qpi:'X',    jpa:'X',      ays:'R',    fca:'A',    gma2:'D',   econ:'',   pjan:'',  op:''},
+  ],
+
+  September:[
+    {date:1, day:'DI',qpi:'D*',    jpa:'A',      ays:'R=KW', fca:'X',    gma2:'X',  op:''},
+    {date:2, day:'WO',qpi:'D*',    jpa:'A',      ays:'X',    fca:'R',    gma2:'KW', op:''},
+    {date:3, day:'DO',qpi:'A',     jpa:'X',      ays:'X',    fca:'R=D',  gma2:'X',  op:''},
+    {date:4, day:'VR',qpi:'A',     jpa:'R=D*',   ays:'X',    fca:'X',    gma2:'KW', op:''},
+    {date:5, day:'ZA',qpi:'X',     jpa:'R',      ays:'A',    fca:'D',    gma2:'X',  op:''},
+    {date:6, day:'ZO',qpi:'R',     jpa:'X',      ays:'A',    fca:'D',    gma2:'X',  op:''},
+    {date:7, day:'MA',qpi:'R',     jpa:'D*',     ays:'X',    fca:'A',    gma2:'KW', op:''},
+    {date:8, day:'DI',qpi:'X',     jpa:'D*',     ays:'R=KW', fca:'A',    gma2:'X',  op:''},
+    {date:9, day:'WO',qpi:'X',     jpa:'A',      ays:'R=D*', fca:'X',    gma2:'KW', op:''},
+    {date:10,day:'DO',qpi:'D*',    jpa:'A',      ays:'X',    fca:'R=KW', gma2:'X',  op:''},
+    {date:11,day:'VR',qpi:'A',     jpa:'X',      ays:'X',    fca:'R=D*', gma2:'KW', op:''},
+    {date:12,day:'ZA',qpi:'A',     jpa:'R',      ays:'D',    fca:'X',    gma2:'X',  op:''},
+    {date:13,day:'ZO',qpi:'X',     jpa:'R',      ays:'A',    fca:'D',    gma2:'X',  op:''},
+    {date:14,day:'MA',qpi:'R',     jpa:'X',      ays:'A',    fca:'D*',   gma2:'KW', op:''},
+    {date:15,day:'DI',qpi:'R=KW',  jpa:'D*',     ays:'X',    fca:'A',    gma2:'X',  op:''},
+    {date:16,day:'WO',qpi:'X',     jpa:'D*',     ays:'R',    fca:'A',    gma2:'KW', op:''},
+    {date:17,day:'DO',qpi:'X',     jpa:'A',      ays:'R=D',  fca:'X',    gma2:'X',  op:''},
+    {date:18,day:'VR',qpi:'D*',    jpa:'A',      ays:'X',    fca:'R',    gma2:'KW', op:''},
+    {date:19,day:'ZA',qpi:'A',     jpa:'X',      ays:'D',    fca:'R',    gma2:'X',  op:''},
+    {date:20,day:'ZO',qpi:'A',     jpa:'R',      ays:'D',    fca:'X',    gma2:'X',  op:''},
+    {date:21,day:'MA',qpi:'X',     jpa:'R=KW',   ays:'A',    fca:'D*',   gma2:'Z',  op:''},
+    {date:22,day:'DI',qpi:'R',     jpa:'X',      ays:'A',    fca:'D*',   gma2:'KW', op:''},
+    {date:23,day:'WO',qpi:'R',     jpa:'D*',     ays:'X',    fca:'A',    gma2:'KW', op:''},
+    {date:24,day:'DO',qpi:'X',     jpa:'D*',     ays:'R',    fca:'A',    gma2:'KW', op:''},
+    {date:25,day:'VR',qpi:'D*',    jpa:'A',      ays:'R',    fca:'X',    gma2:'KW', op:''},
+    {date:26,day:'ZA',qpi:'D',     jpa:'A',      ays:'X',    fca:'R',    gma2:'X',  op:''},
+    {date:27,day:'ZO',qpi:'A',     jpa:'X',      ays:'D',    fca:'R',    gma2:'X',  op:''},
+    {date:28,day:'MA',qpi:'A',     jpa:'R',      ays:'X',    fca:'X',    gma2:'D',  op:''},
+    {date:29,day:'DI',qpi:'X',     jpa:'R',      ays:'A',    fca:'D*',   gma2:'KW', op:''},
+    {date:30,day:'WO',qpi:'R',     jpa:'X',      ays:'A',    fca:'D*',   gma2:'KW', op:''},
   ]
 };
 
@@ -858,6 +873,13 @@ const MULTI_PERSON_COLUMNS = {
     {key:'econ', label:'ECON', bold:false},
     {key:'pjan', label:'PJAN', bold:false},
   ],
+  September: [
+    {key:'gma2', label:'GMA', bold:true},
+    {key:'jpa',  label:'JPA', bold:true},
+    {key:'qpi',  label:'QPI', bold:false},
+    {key:'ays',  label:'AYS', bold:false},
+    {key:'fca',  label:'FCA', bold:false},
+  ],
 };
 const MULTI_PERSON_MONTHS = Object.keys(MULTI_PERSON_COLUMNS);
 
@@ -900,16 +922,9 @@ function undoEdit(){
 }
 
 function emptyMonth(idx){
-  // Blank rows must carry every column this month tracks — a multi-person
-  // month built with only jpa/gma2 would render blank cells for the rest and
-  // then be thrown away by the stale-cache check on the next load.
-  const cols = MULTI_PERSON_COLUMNS[MONTHS[idx]] || [{key:'jpa'},{key:'gma2'}];
-  return Array.from({length:MDAYS[idx]},(_,i)=>{
-    const row = {date:i+1, day:DNAMES[(new Date(2026, idx, i+1).getDay()+6)%7]};
-    cols.forEach(c=>{ row[c.key]=''; });
-    row.op='';
-    return row;
-  });
+  return Array.from({length:MDAYS[idx]},(_,i)=>({
+    date:i+1, day:DNAMES[(new Date(2026, idx, i+1).getDay()+6)%7], jpa:'', gma2:'', op:''
+  }));
 }
 
 // ══════════════════════════════════════════
@@ -1056,32 +1071,151 @@ function setFilter(f){
 }
 
 // ══════════════════════════════════════════
-//  PHOTO UPLOAD (raw reference photo, no OCR)
+//  PHOTO UPLOAD + LOCAL OCR SCAN (no API, no server)
+//  Uses Tesseract.js entirely in the browser.
 // ══════════════════════════════════════════
-function showImageFullscreen(src){
-  const overlay = document.createElement('div');
-  overlay.className = 'img-lightbox';
-  const img = document.createElement('img');
-  img.src = src; img.alt = 'Rooster foto (volledig scherm)';
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'img-lightbox-close'; closeBtn.textContent = '✕';
-  closeBtn.title = 'Sluiten (Esc)';
-  overlay.appendChild(img); overlay.appendChild(closeBtn);
+const KNOWN_SHIFTS = ['X','D','D*','A','KW','R','R=A','R=D','R=KW','VAK','VG','Z'];
 
-  const prevOverflow = document.body.style.overflow;
-  const close = () => {
-    overlay.remove();
-    document.removeEventListener('keydown', onKey);
-    document.body.style.overflow = prevOverflow;   // let the page scroll again
-  };
-  const onKey = e => { if(e.key==='Escape') close(); };
-  // Clicking the photo itself must NOT close it — you're usually zooming in to
-  // read the thing. Only the backdrop, the ✕ button, or Escape close it.
-  img.addEventListener('click', e => e.stopPropagation());
-  overlay.addEventListener('click', close);
-  document.addEventListener('keydown', onKey);
-  document.body.style.overflow = 'hidden';
-  document.body.appendChild(overlay);
+function levenshtein(a, b){
+  const m=a.length, n=b.length;
+  const d=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]);
+  for(let j=0;j<=n;j++) d[0][j]=j;
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++)
+    d[i][j]=Math.min(d[i-1][j]+1, d[i][j-1]+1, d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+  return d[m][n];
+}
+
+// Snap a raw OCR cell to the nearest known shift code.
+function normShift(raw){
+  if(!raw) return '';
+  let s = raw.toUpperCase().replace(/\s+/g,'')
+            .replace(/[—–·.,;:]/g,'')   // stray punctuation
+            .replace(/0/g,'O');          // OCR often reads O as 0
+  // Common letter confusions inside codes
+  s = s.replace(/[|!]/g,'').replace(/=+/,'=');
+  if(s==='' ) return '';
+  if(KNOWN_SHIFTS.includes(s)) return s;
+  // fuzzy match
+  let best='', bestD=99;
+  for(const code of KNOWN_SHIFTS){
+    const dist = levenshtein(s, code);
+    if(dist<bestD){ bestD=dist; best=code; }
+  }
+  return bestD<=1 ? best : s;   // keep raw if no close match (user corrects)
+}
+
+// Collect words+bbox from a Tesseract result across API shapes.
+function collectWords(data){
+  if(Array.isArray(data.words) && data.words.length) return data.words;
+  const out=[];
+  (data.blocks||[]).forEach(b=>(b.paragraphs||[]).forEach(p=>(p.lines||[]).forEach(l=>
+    (l.words||[]).forEach(w=>out.push(w)))));
+  return out;
+}
+
+async function scanRoosterOCR(srcCanvas, m){
+  const status = document.getElementById('ai-status');
+  const set = html => { if(status) status.innerHTML = html; };
+
+  if(typeof Tesseract === 'undefined'){
+    set('⚠️ OCR-bibliotheek niet geladen. Controleer je internetverbinding en herlaad de pagina.');
+    return;
+  }
+
+  const idx = MONTHS.indexOf(m);
+  let worker;
+  try {
+    set('🔍 OCR wordt geladen (eenmalig downloaden)...');
+    worker = await Tesseract.createWorker('eng', 1, {
+      logger: msg => {
+        if(msg.status==='recognizing text')
+          set(`🔍 Tekst lezen... ${Math.round((msg.progress||0)*100)}%`);
+      }
+    });
+    await worker.setParameters({ tessedit_pageseg_mode: '6' }); // assume a uniform block
+
+    const { data } = await worker.recognize(srcCanvas, {}, { blocks: true });
+    await worker.terminate();
+
+    const words = collectWords(data)
+      .map(w => ({
+        text: (w.text||'').trim(),
+        cx: (w.bbox.x0 + w.bbox.x1)/2,
+        cy: (w.bbox.y0 + w.bbox.y1)/2,
+        h:  (w.bbox.y1 - w.bbox.y0)
+      }))
+      .filter(w => w.text);
+
+    if(words.length < 10) throw new Error('Te weinig tekst herkend — probeer een scherpere, rechte foto.');
+
+    // ── Detect column anchors from the header row ──
+    const HEADERS = {DAG:/^DAG$/i, DAT:/^DAT$/i, JPA:/^JPA$/i, GMA:/^GMA2?$/i, OPM:/^OPMERK/i};
+    const anchors = {};
+    for(const w of words){
+      for(const [key,re] of Object.entries(HEADERS)){
+        if(re.test(w.text) && anchors[key]===undefined) anchors[key]=w.cx;
+      }
+    }
+    if(anchors.JPA===undefined || anchors.GMA===undefined)
+      throw new Error('Kon de JPA/GMA kolommen niet vinden in de foto. Maak een rechtere foto van de hele tabel.');
+
+    // ── Cluster words into rows by vertical position ──
+    const medH = words.map(w=>w.h).sort((a,b)=>a-b)[Math.floor(words.length/2)] || 20;
+    const sorted = [...words].sort((a,b)=>a.cy-b.cy);
+    const rows=[]; let cur=[];
+    for(const w of sorted){
+      if(cur.length===0 || Math.abs(w.cy - cur[cur.length-1].cy) < medH*0.7){ cur.push(w); }
+      else { rows.push(cur); cur=[w]; }
+    }
+    if(cur.length) rows.push(cur);
+
+    // ── Build month from a clean base; map OCR rows by their day number ──
+    const base = emptyMonth(idx);
+    const nearest = (row, x) => {
+      let best=null, bd=1e9;
+      for(const w of row){ const d=Math.abs(w.cx-x); if(d<bd){bd=d; best=w;} }
+      return best;
+    };
+    let filled=0;
+    for(const row of rows){
+      // date = a 1..31 integer near the DAT column (or leftmost number)
+      let date=0;
+      const datX = anchors.DAT!==undefined ? anchors.DAT : 0;
+      const nums = row.filter(w=>/^\d{1,2}$/.test(w.text))
+                      .sort((a,b)=>Math.abs(a.cx-datX)-Math.abs(b.cx-datX));
+      if(nums.length){ const n=parseInt(nums[0].text,10); if(n>=1&&n<=base.length) date=n; }
+      if(!date) continue;
+
+      const jpaW = nearest(row, anchors.JPA);
+      const gmaW = nearest(row, anchors.GMA);
+      const r = base[date-1];
+      if(jpaW) r.jpa  = normShift(jpaW.text);
+      if(gmaW) r.gma2 = normShift(gmaW.text);
+      if(anchors.OPM!==undefined){
+        const opWords = row.filter(w=>w.cx > anchors.OPM - medH)
+                           .map(w=>w.text).join(' ').trim();
+        if(opWords && !/^\d+$/.test(opWords)) r.op = opWords;
+      }
+      filled++;
+    }
+
+    if(filled===0) throw new Error('Geen dagen herkend. Probeer een scherpere foto recht van boven.');
+
+    store[m] = base;
+    try{ localStorage.setItem('r26_'+m, JSON.stringify(store[m])); }catch(e){}
+    set(`✅ ${filled} dagen ingelezen voor ${m}! <span style="color:var(--ts)">Controleer de waarden en klik een badge om te corrigeren.</span>`);
+    setTimeout(()=>render(), 1200);
+
+  } catch(err){
+    if(worker){ try{ await worker.terminate(); }catch(e){} }
+    window.__ocrCanvas = srcCanvas; window.__ocrMonth = m;
+    set(`⚠️ ${err.message}<br><br>
+      <button onclick="scanRoosterOCR(window.__ocrCanvas, window.__ocrMonth)"
+        style="padding:6px 18px;background:var(--accent);color:#fff;border:none;
+               border-radius:6px;font-weight:700;cursor:pointer;font-size:12px">
+        🔄 Opnieuw scannen
+      </button>`);
+  }
 }
 
 function processImageFile(file, m){
@@ -1092,36 +1226,56 @@ function processImageFile(file, m){
   reader.onload = ev => {
     const originalSrc = ev.target.result;
 
-    // Show the raw photo immediately, full quality, while it's being saved.
+    // ── Step 1: show image immediately ──
     const wrap = document.getElementById('uploadWrap');
     wrap.innerHTML = `
       <div class="img-wrap" id="preview-wrap">
         <img src="${originalSrc}" alt="Rooster foto"
              style="width:100%;border-radius:10px;border:1px solid var(--border);display:block;margin-bottom:10px">
         <button class="img-remove" onclick="removeUpload('${m}')">✕ Verwijder foto</button>
+      </div>
+      <div id="ai-status" style="text-align:center;padding:14px;font-size:12px;font-weight:600;
+           color:var(--acl);background:var(--card);border:1px solid var(--accent);
+           border-radius:8px;margin-bottom:10px;line-height:1.6">
+        ⏳ Afbeelding opslaan...
       </div>`;
-    const previewImg = wrap.querySelector('#preview-wrap img');
-    if(previewImg) previewImg.addEventListener('click', () => showImageFullscreen(previewImg.src));
 
-    // Downscale only if huge, to keep it well inside localStorage's quota —
-    // otherwise this is just the photo as uploaded, kept as the reference copy.
+    // ── Step 2: save a preview, build a high-contrast OCR canvas, scan locally ──
     const img = new Image();
     img.onload = () => {
-      const PMAX = 1600;
+      // (a) Preview image for localStorage (small JPEG)
+      const PMAX = 1100;
       let pw = img.width, ph = img.height;
       if(pw > PMAX){ ph = Math.round(ph * PMAX / pw); pw = PMAX; }
       const pc = document.createElement('canvas');
       pc.width = pw; pc.height = ph;
       pc.getContext('2d').drawImage(img, 0, 0, pw, ph);
-      try {
-        localStorage.setItem('img_' + m, pc.toDataURL('image/jpeg', 0.9));
-        toast('📸 Foto opgeslagen');
-      } catch(e) {
-        toast('⚠️ Foto opslaan mislukt (te groot)');
+      try { localStorage.setItem('img_' + m, pc.toDataURL('image/jpeg', 0.82)); } catch(e) {}
+
+      // (b) Larger grayscale/contrast canvas for OCR accuracy
+      const OMAX = 1600;
+      let ow = img.width, oh = img.height;
+      if(ow > OMAX){ oh = Math.round(oh * OMAX / ow); ow = OMAX; }
+      const oc = document.createElement('canvas');
+      oc.width = ow; oc.height = oh;
+      const octx = oc.getContext('2d');
+      octx.drawImage(img, 0, 0, ow, oh);
+      const id = octx.getImageData(0, 0, ow, oh);
+      const px = id.data;
+      for(let i=0;i<px.length;i+=4){
+        // luminance → contrast stretch
+        let g = 0.299*px[i] + 0.587*px[i+1] + 0.114*px[i+2];
+        g = g < 140 ? Math.max(0, g-40) : Math.min(255, g+40);
+        px[i]=px[i+1]=px[i+2]=g;
       }
-      buildUpload(m);
+      octx.putImageData(id, 0, 0);
+
+      scanRoosterOCR(oc, m);
     };
-    img.onerror = () => toast('⚠️ Afbeelding kon niet geladen worden.');
+    img.onerror = () => {
+      const status = document.getElementById('ai-status');
+      if(status) status.textContent = '⚠️ Afbeelding kon niet geladen worden.';
+    };
     img.src = originalSrc;
   };
   reader.readAsDataURL(file);
@@ -1145,8 +1299,6 @@ function buildUpload(m){
       <img src="${saved}" alt="Rooster ${m}" style="width:100%;border-radius:10px;border:1px solid var(--border);display:block">
       <button class="img-remove" onclick="removeUpload('${m}')">✕ Verwijder foto</button>`;
     wrap.appendChild(iw);
-    const savedImg = iw.querySelector('img');
-    savedImg.addEventListener('click', () => showImageFullscreen(savedImg.src));
   }
 
   // Upload zone (always visible)
@@ -1154,7 +1306,7 @@ function buildUpload(m){
   zone.innerHTML = `
     <div style="font-size:26px;margin-bottom:6px">${saved ? '🔄' : '📸'}</div>
     <p style="font-weight:700;color:var(--acl)">${saved ? 'Andere foto kiezen' : 'Upload Rooster Foto'}</p>
-    <span style="color:var(--ts)">Klik of sleep een foto hierheen</span>`;
+    <span style="color:var(--ts)">🔍 Leest shifts automatisch in je browser — klik of sleep</span>`;
 
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = 'image/*';
@@ -1176,7 +1328,7 @@ function hrs2025(v){
   if(!v) return 0;
   const s=v.toUpperCase().trim();
   if(s==='D*') return 8;
-  if(s==='D'||s==='X/D'||s==='X=D'||s==='KW=D') return 12;
+  if(s==='D'||s==='X/D'||s==='X=D'||s==='KW=D'||s==='X/D') return 12;
   if(s==='A') return 12;
   if(s==='KW'||s==='KW*') return 4;
   if(s==='R=A'||s==='R=D') return 12;
@@ -1384,8 +1536,7 @@ function render2025(){
         <span>${m} 2025</span>
         <span style="font-family:'JetBrains Mono',monospace;color:#4ade80;font-size:13px">${mHrs}u</span>
       </summary>
-      ${imgSrc2025 ? `<img src="${imgSrc2025}" loading="lazy" decoding="async" onclick="showImageFullscreen(this.src)"
-             style="width:100%;max-height:280px;object-fit:contain;border-bottom:1px solid var(--border);background:#000;display:block;cursor:zoom-in">` : ''}
+      ${imgSrc2025 ? `<img src="${imgSrc2025}" loading="lazy" decoding="async" style="width:100%;max-height:280px;object-fit:contain;border-bottom:1px solid var(--border);background:#000;display:block">` : ''}
       <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:11px;font-family:'JetBrains Mono',monospace">
         <thead><tr style="background:var(--panel)">
@@ -1495,7 +1646,6 @@ function render(){
       <div class="upload-wrap" id="uploadWrap"></div>
       <div class="actions">
         <button class="btn btn-orange" onclick="exportXlsx()">📥 Export Excel</button>
-        <button class="btn btn-ghost"  onclick="exportCalendarGma()">📅 Kalender (GMA)</button>
         <button class="btn btn-ghost"  onclick="clearMonth()">🗑️ Wis maand</button>
         <button class="btn btn-ghost" id="undoBtn" onclick="undoEdit()" ${undoStack.length ? '' : 'disabled'}>↩ Ongedaan</button>
       </div>`;
@@ -1684,7 +1834,7 @@ function personCard(name, days, total, brk, filterKey){
           <span style="font-size:10px;font-weight:700;color:var(--ts)">TOTAAL</span>
           <span style="font-size:13px;font-weight:900;color:${accent};font-family:'JetBrains Mono',monospace">${total}u</span>
         </div>
-        ${MULTI_PERSON_MONTHS.includes(current) ? '' : `<div class="person-card-detail" style="margin-top:8px" onclick="event.stopPropagation();setFilter('${filterKey}')">↓ Filter tabel op ${name}</div>`}
+        <div class="person-card-detail" style="margin-top:8px" onclick="event.stopPropagation();setFilter('${filterKey}')">↓ Filter tabel op ${name}</div>
       </div>
     </details>
   </div>`;
@@ -1705,147 +1855,20 @@ function refreshCards(){
 // ══════════════════════════════════════════
 function exportXlsx(){
   const m=current;
-  // Export every column this month tracks, not just JPA/GMA2 — otherwise a
-  // multi-person month (June/July/August) loses QPI/AYS/FCA/ECON/PJAN.
-  // PJAN is a flag column with no hours, so it gets no "Uren" companion.
-  const cols = MULTI_PERSON_COLUMNS[m] || [{key:'jpa',label:'JPA'},{key:'gma2',label:'GMA2'}];
-  const hasHrs = c => c.key!=='pjan';
-
-  const header=['DAT','DAG'];
-  cols.forEach(c=>{ header.push(c.label); if(hasHrs(c)) header.push(c.label+' Uren'); });
-  header.push('OPMERKING');
-
-  const rows=store[m].map(r=>{
-    const out=[r.date,r.day];
-    cols.forEach(c=>{ const v=r[c.key]||''; out.push(v); if(hasHrs(c)) out.push(hrs(v)+'u'); });
-    out.push(r.op||'');
-    return out;
-  });
-
-  const totals=['TOTAAL',''];
-  cols.forEach(c=>{
-    totals.push('');
-    if(hasHrs(c)) totals.push(store[m].reduce((s,r)=>s+hrs(r[c.key]),0)+'u');
-  });
-  totals.push('');
-  rows.push(totals);
-
-  const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
-  const widths=[{wch:5},{wch:5}];
-  cols.forEach(c=>{ widths.push({wch:8}); if(hasHrs(c)) widths.push({wch:9}); });
-  widths.push({wch:18});
-  ws['!cols']=widths;
+  const rows=store[m].map(r=>[r.date,r.day,r.jpa,hrs(r.jpa)+'u',r.gma2,hrs(r.gma2)+'u',r.op||'']);
+  const t=calcTotals(m);
+  rows.push(['TOTAAL','','',t.jpa+'u','',t.gma+'u','']);
+  const ws=XLSX.utils.aoa_to_sheet([['DAT','DAG','JPA','JPA Uren','GMA2','GMA2 Uren','OPMERKING'],...rows]);
+  ws['!cols']=[{wch:5},{wch:5},{wch:8},{wch:8},{wch:8},{wch:9},{wch:18}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,m);
   XLSX.writeFile(wb,`Rooster_${m}_2026.xlsx`);
   toast('✅ Excel geëxporteerd!');
 }
 
-// ══════════════════════════════════════════
-//  CALENDAR EXPORT (.ics — import into iOS/Google/Outlook Calendar)
-//  No server involved: real "push" notifications would need one to schedule
-//  and deliver alerts while the app is closed, which this app deliberately
-//  doesn't have. A calendar alarm does the same job natively and reliably —
-//  each work day becomes an event with a day-before and hour-before alert,
-//  and the phone's own Calendar app handles firing them from then on.
-// ══════════════════════════════════════════
-
-// Real clock times per shift, used to place each event and count the alarms
-// back from. A code with hrs()>0 but no entry here (a future new code) still
-// gets an event — it just falls back to an 08:00 start for its known duration.
-const SHIFT_TIMES = {
-  D:       {startH:8,  durH:12},
-  'D*':    {startH:12, durH:8},
-  A:       {startH:20, durH:12}, // overnight — ends 08:00 the next day
-  KW:      {startH:8,  durH:4},
-  'R=A':   {startH:20, durH:12},
-  'R=D':   {startH:8,  durH:12},
-  'R=KW':  {startH:8,  durH:4},
-  'X=D':   {startH:8,  durH:12},
-  'X/D':   {startH:8,  durH:12},
-  'D*+KW': {startH:8,  durH:12},
-};
-
-function icsEscape(s){
-  // Order matters: backslash first, or the escapes added below would get
-  // double-escaped. \r\n / lone \r / lone \n all normalize to the same
-  // escaped \n — an unescaped bare \r left in a free-typed remark could
-  // otherwise look like a stray line break to a parser, since the file's
-  // real lines are joined with \r\n.
-  return String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r\n|\r|\n/g,'\\n');
-}
-
-// Floating local time (no Z / TZID) — the shift is "8am wherever the phone
-// is", so this intentionally avoids guessing a specific IANA timezone.
-function icsLocal(d){
-  const p = n => String(n).padStart(2,'0');
-  return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}00`;
-}
-
-function icsUtcNow(){
-  return new Date().toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
-}
-
-function exportCalendarGma(){
-  const m = current;
-  const idx = MONTHS.indexOf(m);
-  const events = [];
-
-  store[m].forEach(row=>{
-    const code = (row.gma2||'').toUpperCase().trim();
-    const h = hrs(code);
-    if(h<=0) return; // X, VAK, Z, R, VG, blank, ... — nothing to work, nothing to alert on
-
-    const times = SHIFT_TIMES[code] || {startH:8, durH:h};
-    const start = new Date(2026, idx, row.date, times.startH, 0, 0);
-    const end   = new Date(start.getTime() + times.durH*3600*1000);
-    events.push({
-      uid: `gma-2026-${idx}-${row.date}@rooster-observatoren`,
-      start, end,
-      summary: `GMA dienst (${code})${row.op ? ' — '+row.op : ''}`,
-    });
-  });
-
-  if(events.length===0){ toast('⚠️ Geen GMA diensten deze maand'); return; }
-
-  const now = icsUtcNow();
-  const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Rooster Observatoren//NL','CALSCALE:GREGORIAN'];
-  events.forEach(e=>{
-    lines.push(
-      'BEGIN:VEVENT',
-      `UID:${e.uid}`,
-      `DTSTAMP:${now}`,
-      `DTSTART:${icsLocal(e.start)}`,
-      `DTEND:${icsLocal(e.end)}`,
-      `SUMMARY:${icsEscape(e.summary)}`,
-      'BEGIN:VALARM',
-      'ACTION:DISPLAY',
-      `DESCRIPTION:${icsEscape(e.summary)} — morgen`,
-      'TRIGGER:-P1D',
-      'END:VALARM',
-      'BEGIN:VALARM',
-      'ACTION:DISPLAY',
-      `DESCRIPTION:${icsEscape(e.summary)} — over 1 uur`,
-      'TRIGGER:-PT1H',
-      'END:VALARM',
-      'END:VEVENT'
-    );
-  });
-  lines.push('END:VCALENDAR');
-
-  const blob = new Blob([lines.join('\r\n')], {type:'text/calendar;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `GMA_Rooster_${m}_2026.ics`;
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
-  toast(`📅 ${events.length} diensten geëxporteerd naar kalender!`);
-}
-
 function clearMonth(){
   if(!confirm(`Alle data voor ${current} wissen?`)) return;
   store[current]=emptyMonth(MONTHS.indexOf(current));
-  save(current);   // without this the wipe never persisted — a reload brought the old data back
   toast('🗑️ Maand gewist');
   render();
 }
@@ -1864,13 +1887,11 @@ function toast(msg){
 //  INIT
 // ══════════════════════════════════════════
 const _today      = new Date();
-// The planner is for 2026 only — mark "Vandaag" solely when the real date
-// falls in 2026, otherwise e.g. 8 Aug 2027 would light up the 8 Aug 2026 row.
-const _todayMonth = _today.getFullYear()===2026 ? MONTHS[_today.getMonth()] : null;
+const _todayMonth = MONTHS[_today.getMonth()]; // index-based, always correct
 const _todayDate  = _today.getDate();
 
-// Open on the current calendar month (handy for browsing in any year)
-current = MONTHS[_today.getMonth()];
+// Start on the current real month
+if(MONTHS.includes(_todayMonth)) current = _todayMonth;
 
 buildTabs();
 render();
