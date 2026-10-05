@@ -1220,6 +1220,31 @@ function removeUpload(m){
   render();
 }
 
+
+function showOriginal(m){
+  const main = document.querySelector('.main');
+  if(!main) return;
+  let orig = document.getElementById('origWrap');
+  if(!orig){
+    orig = document.createElement('div');
+    orig.id = 'origWrap';
+    orig.style.margin = '0 0 14px';
+    main.insertBefore(orig, main.firstChild);
+  }
+  const uploaded = localStorage.getItem('img_'+m);
+  const src = uploaded || (typeof BUILTIN_IMGS !== 'undefined' && BUILTIN_IMGS[m]) || '';
+  if(!src){ orig.innerHTML = ''; orig.style.display = 'none'; return; }
+  orig.style.display = '';
+  orig.innerHTML = `
+    <div class="img-wrap">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.4px;color:var(--ts);margin-bottom:6px">ORIGINEEL ROOSTER</div>
+      <img alt="Origineel rooster ${m}" style="width:100%;border-radius:10px;border:1px solid var(--border);display:block;cursor:zoom-in;background:#111">
+    </div>`;
+  const im = orig.querySelector('img');
+  im.src = src;
+  im.addEventListener('click', () => showImageFullscreen(im.src));
+}
+
 function buildUpload(m){
   const wrap = document.getElementById('uploadWrap');
   wrap.innerHTML = '';
@@ -1595,6 +1620,9 @@ function render(){
   // Header
   document.getElementById('hTitle').textContent = `${m} 2026`;
   document.getElementById('hSub').textContent   = `Maandplanning – ${store[m].length} dagen`;
+
+  // Original sheet photo, same slot treatment as a saved month photo.
+  showOriginal(m);
 
   // Upload (now at the bottom of the page)
   buildUpload(m);

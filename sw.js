@@ -1,5 +1,5 @@
 'use strict';
-const CACHE = 'rooster-v4';
+const CACHE = 'rooster-v5';
 const ASSETS = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
