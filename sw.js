@@ -1,6 +1,6 @@
 'use strict';
-const CACHE = 'rooster-v5';
-const ASSETS = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
+const CACHE = 'rooster-v6';
+const ASSETS = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png', './oktober-2026.jpg'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
@@ -18,11 +18,8 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const req = e.request;
-  // Skip cross-origin requests (CDN, fonts, API)
   if (!req.url.startsWith(self.location.origin)) return;
 
-  // Network-first for the HTML document so schedule updates show immediately;
-  // fall back to the cached copy when offline.
   const isDoc = req.mode === 'navigate' ||
                 req.destination === 'document' ||
                 req.url.endsWith('/') ||
@@ -32,15 +29,25 @@ self.addEventListener('fetch', e => {
     e.respondWith(
       fetch(req)
         .then(res => {
-          const copy = res.clone();
-          caches.open(CACHE).then(c => c.put('./index.html', copy));
+          // Never store an error page as the offline copy.
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then(c => c.put('./index.html', copy)).catch(() => {});
+          }
           return res;
         })
-        .catch(() => caches.match('./index.html'))
+        .catch(() => caches.match('./index.html').then(hit => hit || Response.error()))
     );
     return;
   }
 
-  // Cache-first for static assets (icons, manifest).
-  e.respondWith(caches.match(req).then(cached => cached || fetch(req)));
+  e.respondWith(
+    caches.match(req).then(cached => cached || fetch(req).then(res => {
+      if (res && res.ok && req.method === 'GET') {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+      }
+      return res;
+    }))
+  );
 });
