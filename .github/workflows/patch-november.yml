@@ -1,0 +1,86 @@
+name: Patch November 2026
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'november-2026.json'
+      - '.github/workflows/patch-november.yml'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inject November into index.html
+        run: |
+          python3 << 'PY'
+          import json, re, pathlib
+          root = pathlib.Path('.')
+          data = json.loads((root / 'november-2026.json').read_text())
+          lines = []
+          lines.append('  November:[')
+          for r in data:
+              lines.append(
+                  "    {date:%d, day:'%s',qpi:'%s', jpa:'%s', ays:'%s', fca:'%s', gma2:'%s', op:'%s'}," % (
+                      r['date'], r['day'], r['qpi'], r['jpa'], r['ays'], r['fca'], r['gma2'], r.get('op',''))
+              )
+          lines.append('  ]')
+          nov_block = '\n'.join(lines)
+          html = (root / 'index.html').read_text()
+          # Insert November after October block in PRESET
+          if "November:[" in html[html.find('const PRESET'):html.find('const ROOSTER_IMGS')]:
+              print('November already in PRESET')
+          else:
+              marker = "  ]\n};\n\nconst ROOSTER_IMGS_2025"
+              if marker not in html:
+                  raise SystemExit('PRESET end marker not found')
+              html = html.replace(marker, "  ],\n" + nov_block + "\n};\n\nconst ROOSTER_IMGS_2025", 1)
+              print('Inserted November PRESET')
+          # MULTI_PERSON_COLUMNS
+          multi_nov = """  November: [
+    {key:'gma2', label:'GMA', bold:true},
+    {key:'jpa',  label:'JPA', bold:true},
+    {key:'qpi',  label:'QPI', bold:false},
+    {key:'ays',  label:'AYS', bold:false},
+    {key:'fca',  label:'FCA', bold:false},
+  ],
+};"""
+          if 'November: [' not in html[html.find('MULTI_PERSON_COLUMNS'):html.find('MULTI_PERSON_MONTHS')]:
+              html = html.replace(
+                  "  October: [\n    {key:'gma2', label:'GMA', bold:true},\n    {key:'jpa',  label:'JPA', bold:true},\n    {key:'qpi',  label:'QPI', bold:false},\n    {key:'ays',  label:'AYS', bold:false},\n    {key:'fca',  label:'FCA', bold:false},\n  ],\n};",
+                  "  October: [\n    {key:'gma2', label:'GMA', bold:true},\n    {key:'jpa',  label:'JPA', bold:true},\n    {key:'qpi',  label:'QPI', bold:false},\n    {key:'ays',  label:'AYS', bold:false},\n    {key:'fca',  label:'FCA', bold:false},\n  ],\n" + multi_nov,
+                  1
+              )
+              print('Added MULTI_PERSON November')
+          # PRESET_REV
+          if 'November:' not in html[html.find('PRESET_REV'):html.find('PRESET_REV')+80]:
+              html = html.replace('PRESET_REV = { October: 2 };', 'PRESET_REV = { October: 2, November: 1 };', 1)
+              print('Bumped PRESET_REV')
+          # BUILTIN image path (optional photo)
+          if "November:" not in html[html.find('BUILTIN_IMGS'):html.find('BUILTIN_IMGS')+120]:
+              html = html.replace(
+                  "BUILTIN_IMGS = { October: 'oktober-2026.jpg' };",
+                  "BUILTIN_IMGS = { October: 'oktober-2026.jpg', November: 'november-2026.jpg' };",
+                  1
+              )
+              print('Added BUILTIN November')
+          (root / 'index.html').write_text(html)
+          # sw.js cache bump + asset
+          sw = (root / 'sw.js').read_text()
+          sw = sw.replace("const CACHE = 'rooster-v6';", "const CACHE = 'rooster-v7';")
+          if 'november-2026.jpg' not in sw:
+              sw = sw.replace(
+                  "'./oktober-2026.jpg']",
+                  "'./oktober-2026.jpg', './november-2026.jpg']"
+              )
+          (root / 'sw.js').write_text(sw)
+          print('Updated sw.js')
+          PY
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html sw.js
+          git diff --cached --quiet || git commit -m "Add November 2026 roster to app preset"
+          git push
