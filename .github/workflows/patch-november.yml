@@ -6,6 +6,7 @@ on:
     paths:
       - november-2026.json
       - .github/scripts/inject-november.py
+      - .github/scripts/fix-november-builtin.py
       - .github/workflows/patch-november.yml
 
 jobs:
@@ -18,6 +19,9 @@ jobs:
 
       - name: Inject November into index.html
         run: python3 .github/scripts/inject-november.py
+
+      - name: Drop missing November photo reference
+        run: python3 .github/scripts/fix-november-builtin.py
 
       - name: Commit if changed
         run: |
