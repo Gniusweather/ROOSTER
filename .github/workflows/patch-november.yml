@@ -1,10 +1,12 @@
 name: Patch November 2026
+
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
   push:
     paths:
-      - 'november-2026.json'
-      - '.github/workflows/patch-november.yml'
+      - november-2026.json
+      - .github/workflows/patch-november.yml
+
 jobs:
   patch:
     runs-on: ubuntu-latest
@@ -12,14 +14,14 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
       - name: Inject November into index.html
         run: |
           python3 << 'PY'
-          import json, re, pathlib
+          import json, pathlib
           root = pathlib.Path('.')
           data = json.loads((root / 'november-2026.json').read_text())
-          lines = []
-          lines.append('  November:[')
+          lines = ['  November:[']
           for r in data:
               lines.append(
                   "    {date:%d, day:'%s',qpi:'%s', jpa:'%s', ays:'%s', fca:'%s', gma2:'%s', op:'%s'}," % (
@@ -28,17 +30,20 @@ jobs:
           lines.append('  ]')
           nov_block = '\n'.join(lines)
           html = (root / 'index.html').read_text()
-          # Insert November after October block in PRESET
-          if "November:[" in html[html.find('const PRESET'):html.find('const ROOSTER_IMGS')]:
-              print('November already in PRESET')
-          else:
-              marker = "  ]\n};\n\nconst ROOSTER_IMGS_2025"
+          preset_start = html.find('const PRESET')
+          rooster = html.find('const ROOSTER_IMGS')
+          if 'November:[' not in html[preset_start:rooster]:
+              marker = '  ]\n};\n\nconst ROOSTER_IMGS_2025'
               if marker not in html:
                   raise SystemExit('PRESET end marker not found')
-              html = html.replace(marker, "  ],\n" + nov_block + "\n};\n\nconst ROOSTER_IMGS_2025", 1)
+              html = html.replace(marker, '  ],\n' + nov_block + '\n};\n\nconst ROOSTER_IMGS_2025', 1)
               print('Inserted November PRESET')
-          # MULTI_PERSON_COLUMNS
-          multi_nov = """  November: [
+          else:
+              print('November already in PRESET')
+          multi_start = html.find('MULTI_PERSON_COLUMNS')
+          multi_end = html.find('MULTI_PERSON_MONTHS')
+          if 'November: [' not in html[multi_start:multi_end]:
+              old = """  October: [
     {key:'gma2', label:'GMA', bold:true},
     {key:'jpa',  label:'JPA', bold:true},
     {key:'qpi',  label:'QPI', bold:false},
@@ -46,19 +51,29 @@ jobs:
     {key:'fca',  label:'FCA', bold:false},
   ],
 };"""
-          if 'November: [' not in html[html.find('MULTI_PERSON_COLUMNS'):html.find('MULTI_PERSON_MONTHS')]:
-              html = html.replace(
-                  "  October: [\n    {key:'gma2', label:'GMA', bold:true},\n    {key:'jpa',  label:'JPA', bold:true},\n    {key:'qpi',  label:'QPI', bold:false},\n    {key:'ays',  label:'AYS', bold:false},\n    {key:'fca',  label:'FCA', bold:false},\n  ],\n};",
-                  "  October: [\n    {key:'gma2', label:'GMA', bold:true},\n    {key:'jpa',  label:'JPA', bold:true},\n    {key:'qpi',  label:'QPI', bold:false},\n    {key:'ays',  label:'AYS', bold:false},\n    {key:'fca',  label:'FCA', bold:false},\n  ],\n" + multi_nov,
-                  1
-              )
+              new = """  October: [
+    {key:'gma2', label:'GMA', bold:true},
+    {key:'jpa',  label:'JPA', bold:true},
+    {key:'qpi',  label:'QPI', bold:false},
+    {key:'ays',  label:'AYS', bold:false},
+    {key:'fca',  label:'FCA', bold:false},
+  ],
+  November: [
+    {key:'gma2', label:'GMA', bold:true},
+    {key:'jpa',  label:'JPA', bold:true},
+    {key:'qpi',  label:'QPI', bold:false},
+    {key:'ays',  label:'AYS', bold:false},
+    {key:'fca',  label:'FCA', bold:false},
+  ],
+};"""
+              if old not in html:
+                  raise SystemExit('MULTI_PERSON October block not found')
+              html = html.replace(old, new, 1)
               print('Added MULTI_PERSON November')
-          # PRESET_REV
-          if 'November:' not in html[html.find('PRESET_REV'):html.find('PRESET_REV')+80]:
+          if 'November:' not in html[html.find('PRESET_REV'):html.find('PRESET_REV')+100]:
               html = html.replace('PRESET_REV = { October: 2 };', 'PRESET_REV = { October: 2, November: 1 };', 1)
               print('Bumped PRESET_REV')
-          # BUILTIN image path (optional photo)
-          if "November:" not in html[html.find('BUILTIN_IMGS'):html.find('BUILTIN_IMGS')+120]:
+          if "November:" not in html[html.find('BUILTIN_IMGS'):html.find('BUILTIN_IMGS')+140]:
               html = html.replace(
                   "BUILTIN_IMGS = { October: 'oktober-2026.jpg' };",
                   "BUILTIN_IMGS = { October: 'oktober-2026.jpg', November: 'november-2026.jpg' };",
@@ -66,17 +81,14 @@ jobs:
               )
               print('Added BUILTIN November')
           (root / 'index.html').write_text(html)
-          # sw.js cache bump + asset
           sw = (root / 'sw.js').read_text()
           sw = sw.replace("const CACHE = 'rooster-v6';", "const CACHE = 'rooster-v7';")
           if 'november-2026.jpg' not in sw:
-              sw = sw.replace(
-                  "'./oktober-2026.jpg']",
-                  "'./oktober-2026.jpg', './november-2026.jpg']"
-              )
+              sw = sw.replace("'./oktober-2026.jpg']", "'./oktober-2026.jpg', './november-2026.jpg']")
           (root / 'sw.js').write_text(sw)
           print('Updated sw.js')
           PY
+
       - name: Commit if changed
         run: |
           git config user.name "github-actions[bot]"
