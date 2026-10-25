@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - november-2026.json
+      - .github/scripts/inject-november.py
       - .github/workflows/patch-november.yml
 
 jobs:
@@ -16,78 +17,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Inject November into index.html
-        run: |
-          python3 << 'PY'
-          import json, pathlib
-          root = pathlib.Path('.')
-          data = json.loads((root / 'november-2026.json').read_text())
-          lines = ['  November:[']
-          for r in data:
-              lines.append(
-                  "    {date:%d, day:'%s',qpi:'%s', jpa:'%s', ays:'%s', fca:'%s', gma2:'%s', op:'%s'}," % (
-                      r['date'], r['day'], r['qpi'], r['jpa'], r['ays'], r['fca'], r['gma2'], r.get('op',''))
-              )
-          lines.append('  ]')
-          nov_block = '\n'.join(lines)
-          html = (root / 'index.html').read_text()
-          preset_start = html.find('const PRESET')
-          rooster = html.find('const ROOSTER_IMGS')
-          if 'November:[' not in html[preset_start:rooster]:
-              marker = '  ]\n};\n\nconst ROOSTER_IMGS_2025'
-              if marker not in html:
-                  raise SystemExit('PRESET end marker not found')
-              html = html.replace(marker, '  ],\n' + nov_block + '\n};\n\nconst ROOSTER_IMGS_2025', 1)
-              print('Inserted November PRESET')
-          else:
-              print('November already in PRESET')
-          multi_start = html.find('MULTI_PERSON_COLUMNS')
-          multi_end = html.find('MULTI_PERSON_MONTHS')
-          if 'November: [' not in html[multi_start:multi_end]:
-              old = """  October: [
-    {key:'gma2', label:'GMA', bold:true},
-    {key:'jpa',  label:'JPA', bold:true},
-    {key:'qpi',  label:'QPI', bold:false},
-    {key:'ays',  label:'AYS', bold:false},
-    {key:'fca',  label:'FCA', bold:false},
-  ],
-};"""
-              new = """  October: [
-    {key:'gma2', label:'GMA', bold:true},
-    {key:'jpa',  label:'JPA', bold:true},
-    {key:'qpi',  label:'QPI', bold:false},
-    {key:'ays',  label:'AYS', bold:false},
-    {key:'fca',  label:'FCA', bold:false},
-  ],
-  November: [
-    {key:'gma2', label:'GMA', bold:true},
-    {key:'jpa',  label:'JPA', bold:true},
-    {key:'qpi',  label:'QPI', bold:false},
-    {key:'ays',  label:'AYS', bold:false},
-    {key:'fca',  label:'FCA', bold:false},
-  ],
-};"""
-              if old not in html:
-                  raise SystemExit('MULTI_PERSON October block not found')
-              html = html.replace(old, new, 1)
-              print('Added MULTI_PERSON November')
-          if 'November:' not in html[html.find('PRESET_REV'):html.find('PRESET_REV')+100]:
-              html = html.replace('PRESET_REV = { October: 2 };', 'PRESET_REV = { October: 2, November: 1 };', 1)
-              print('Bumped PRESET_REV')
-          if "November:" not in html[html.find('BUILTIN_IMGS'):html.find('BUILTIN_IMGS')+140]:
-              html = html.replace(
-                  "BUILTIN_IMGS = { October: 'oktober-2026.jpg' };",
-                  "BUILTIN_IMGS = { October: 'oktober-2026.jpg', November: 'november-2026.jpg' };",
-                  1
-              )
-              print('Added BUILTIN November')
-          (root / 'index.html').write_text(html)
-          sw = (root / 'sw.js').read_text()
-          sw = sw.replace("const CACHE = 'rooster-v6';", "const CACHE = 'rooster-v7';")
-          if 'november-2026.jpg' not in sw:
-              sw = sw.replace("'./oktober-2026.jpg']", "'./oktober-2026.jpg', './november-2026.jpg']")
-          (root / 'sw.js').write_text(sw)
-          print('Updated sw.js')
-          PY
+        run: python3 .github/scripts/inject-november.py
 
       - name: Commit if changed
         run: |
