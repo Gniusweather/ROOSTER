@@ -1,0 +1,26 @@
+name: Wire November Photo
+
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - november-2026.jpg
+      - .github/scripts/wire-november-photo.py
+      - .github/workflows/wire-november-photo.yml
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wire BUILTIN and SW
+        run: python3 .github/scripts/wire-november-photo.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html sw.js
+          git diff --cached --quiet || git commit -m "Wire November 2026 original roster photo"
+          git push
