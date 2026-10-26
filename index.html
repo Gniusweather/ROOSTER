@@ -1139,7 +1139,7 @@ function calcTotals(m){
 // ══════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════
-let current = 'May';
+let current = MONTHS[new Date().getMonth()];
 let filter  = 'all'; // all | jpa | gma
 let mode    = '2026'; // '2026' | '2025'
 const undoStack = [];
@@ -1165,10 +1165,19 @@ function buildTabs(){
 
   MONTHS.forEach(m=>{
     const b=document.createElement('button');
-    b.className='tab-btn'+(mode==='2026'&&m===current?' active':'');
-    b.textContent=m;
+    const isActive = mode==='2026'&&m===current;
+    b.className='tab-btn'+(isActive?' active':'');
+    b.dataset.month = m;
+    // Dot marks the real calendar month in the strip
+    b.textContent = (m===_todayMonth) ? (m + ' ·') : m;
     b.onclick=()=>{ mode='2026'; current=m; render(); };
     el.appendChild(b);
+  });
+
+  // Keep the active month tab visible in the horizontal strip
+  requestAnimationFrame(()=>{
+    const active = el.querySelector('.tab-btn.active');
+    if(active) active.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'});
   });
 }
 
@@ -1658,7 +1667,7 @@ function render(){
   }
 
   // Update tabs
-  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.textContent===m));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.month===m || (mode==='2025' && b.textContent.includes('2025'))));
 
   // Header
   document.getElementById('hTitle').textContent = `${m} 2026`;
@@ -2030,7 +2039,8 @@ const _today      = new Date();
 const _todayMonth = _today.getFullYear()===2026 ? MONTHS[_today.getMonth()] : null;
 const _todayDate  = _today.getDate();
 
-// Open on the current calendar month (handy for browsing in any year)
+// Always open on the month we are in (2026 calendar)
+mode = '2026';
 current = MONTHS[_today.getMonth()];
 
 buildTabs();
@@ -2040,6 +2050,9 @@ render();
 setTimeout(()=>{
   const row = document.getElementById('today-row');
   if(row) row.scrollIntoView({behavior:'smooth', block:'center'});
+  // Also ensure the month tab strip shows the active month
+  const activeTab = document.querySelector('#tabs .tab-btn.active');
+  if(activeTab) activeTab.scrollIntoView({behavior:'smooth', inline:'center', block:'nearest'});
 }, 150);
 
 if('serviceWorker' in navigator){
