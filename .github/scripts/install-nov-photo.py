@@ -1,0 +1,1 @@
+@file:///home/workdir/artifacts/install-nov-photo.py
