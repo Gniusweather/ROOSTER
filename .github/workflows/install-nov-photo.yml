@@ -2,11 +2,6 @@ name: Install November Photo
 
 on:
   workflow_dispatch: {}
-  push:
-    paths:
-      - .github/novb64/**
-      - .github/scripts/run-nov-parts.py
-      - .github/workflows/install-nov-photo.yml
 
 jobs:
   install:
