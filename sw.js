@@ -1,6 +1,6 @@
 'use strict';
-const CACHE = 'rooster-v10';
-const ASSETS = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png', './oktober-2026.jpg'];
+const CACHE = 'rooster-v14';
+const ASSETS = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png', './oktober-2026.jpg', './november-2026.jpeg'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
