@@ -1800,6 +1800,13 @@ function renderTableOnly(){
   });
 }
 
+function contractBase(m){
+  // GMA monthly contract hours (overtime = total - base)
+  if(m === 'October') return 72;
+  if(m === 'November') return 115;
+  return 144;
+}
+
 function personCard(name, days, total, brk, filterKey){
   const isGma = filterKey==='gma';
   const accent = isGma ? '#60a5fa' : 'var(--accent)';
@@ -1845,6 +1852,15 @@ function personCard(name, days, total, brk, filterKey){
         </div>
         <div class="person-card-row">WERKDAGEN <span style="color:${accent}">${days}</span></div>
         <div class="person-card-row">⏱ TOTAAL UREN <span style="color:${accent}">${total}U</span></div>
+      
+        ${isGma ? (() => {
+          const base = contractBase(current);
+          const ot = total - base;
+          const otColor = ot > 0 ? '#fbbf24' : (ot < 0 ? '#94a3b8' : accent);
+          const otLabel = ot > 0 ? ('+' + ot + 'U') : (ot + 'U');
+          return `<div class="person-card-row">OVERUREN <span style="color:${otColor}">${otLabel}</span></div>
+          <div style="font-size:9px;color:var(--ts);margin-top:-2px;margin-bottom:4px">contract ${base}u · totaal ${total}u</div>`;
+        })() : ''}
       </summary>
       <div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.07)">
         <div style="font-size:9px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:8px">Berekening</div>
