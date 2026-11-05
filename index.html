@@ -1807,6 +1807,12 @@ function contractBase(m){
   return 144;
 }
 
+// GMA overtime for the person card. November is fixed at +16u (per request).
+function gmaOvertime(m, total){
+  if(m === 'November') return 16;
+  return total - contractBase(m);
+}
+
 function personCard(name, days, total, brk, filterKey){
   const isGma = filterKey==='gma';
   const accent = isGma ? '#60a5fa' : 'var(--accent)';
@@ -1855,7 +1861,7 @@ function personCard(name, days, total, brk, filterKey){
       
         ${isGma ? (() => {
           const base = contractBase(current);
-          const ot = total - base;
+          const ot = gmaOvertime(current, total);
           const otColor = ot > 0 ? '#fbbf24' : (ot < 0 ? '#94a3b8' : accent);
           const otLabel = ot > 0 ? ('+' + ot + 'U') : (ot + 'U');
           return `<div class="person-card-row">OVERUREN <span style="color:${otColor}">${otLabel}</span></div>
