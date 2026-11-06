@@ -971,7 +971,7 @@ const MULTI_PERSON_MONTHS = Object.keys(MULTI_PERSON_COLUMNS);
 const PRESET_REV = { October: 2, November: 1 };
 
 // Shipped roster photos. A user upload in localStorage still wins.
-const BUILTIN_IMGS = { October: 'oktober-2026.jpg', November: 'november-2026.jpeg' };
+const BUILTIN_IMGS = { October: 'oktober-2026.jpg', November: 'november-2026.jpeg?v=20261105' };
 
 // ══════════════════════════════════════════
 //  STORE
@@ -1271,6 +1271,20 @@ function removeUpload(m){
   render();
 }
 
+
+
+// One-time: drop stale local November photo so the new repo scan is shown.
+(function(){
+  try {
+    const REV = 2; // bump when replacing november-2026.jpeg again
+    const key = 'imgRev_November';
+    const cur = parseInt(localStorage.getItem(key) || '0', 10);
+    if (cur < REV) {
+      localStorage.removeItem('img_November');
+      localStorage.setItem(key, String(REV));
+    }
+  } catch (e) {}
+})();
 
 function showOriginal(m){
   const main = document.querySelector('.main');
