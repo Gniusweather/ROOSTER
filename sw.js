@@ -1,5 +1,5 @@
 'use strict';
-const CACHE = 'rooster-v20';
+const CACHE = 'rooster-v21';
 const ASSETS = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png', './oktober-2026.jpg', './november-2026.jpeg', './december-2026.jpeg']  /* query-busted in page */;
 
 self.addEventListener('install', e => {
