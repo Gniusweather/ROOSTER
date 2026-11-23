@@ -1,0 +1,25 @@
+name: Patch December 2026
+
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - .github/scripts/patch-december.py
+      - .github/december_preset.js
+      - .github/workflows/patch-december.yml
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 .github/scripts/patch-december.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html sw.js
+          git diff --cached --quiet || git commit -m "December 2026: full roster, multi-person, OT base 115u"
+          git push
